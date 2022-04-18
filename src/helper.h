@@ -21,3 +21,17 @@ void checkStatus(int r_fd, int w_fd){
 void printError(char error[]){
     write(STDOUT_FILENO, error, strlen(error));
 }
+
+// Function for reading lines in files
+ssize_t readln(int fd, char *line, size_t size){
+    ssize_t read_bytes, total_read_bytes = 0;
+    
+    while(total_read_bytes < size -1){
+        read_bytes = read(fd,&line[total_read_bytes],sizeof(char));
+        if (read_bytes < 0) break;
+        if(line[total_read_bytes++] == '\n') break;
+    }
+    line[total_read_bytes] = '\0';
+
+    return total_read_bytes;
+}

@@ -1,3 +1,13 @@
+/*
+ARGUMENTOS CLIENTE:
+    -> status
+        * verifica o estado do pedido de transformações
+    -> proc-file
+        * path para o ficheiro a transformar
+        * path onde é guardada a nova versão
+        * sequencia de ids das transformações a executar
+*/
+
 // Client
 #include "helper.h"
 
