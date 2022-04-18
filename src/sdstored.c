@@ -22,8 +22,6 @@ typedef struct ServerConfig{
 } * ServerConfig;
 
 
-// Function for adding configuration do the server
-
 
 // Function for loading server
 int loadServer(char const * path, ServerConfig * sc){
@@ -39,7 +37,7 @@ int loadServer(char const * path, ServerConfig * sc){
     tmp_sc = malloc(sizeof(struct Transformation) * 7);
     
     while(readln(config_fd, buffer, MAX_BUFF_SIZE) && configured < 7){
-        addConfiguration(tmp_sc, buffer);
+        // process line and add info to struct
         configured++;
     }
 
