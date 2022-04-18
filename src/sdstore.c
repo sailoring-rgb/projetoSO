@@ -1,26 +1,25 @@
 // Client
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-
-#define argCountError "[ERROR] Insufficient number of arguments.\n"
-#define argError "[ERROR] Invalid argument.\n"
+#include "helper.h"
 
 int main(int argc, char *argv[]){
     if(argc < 2){
-        write(STDOUT_FILENO, argCountError, sizeof(argCountError));
+        printError(argCountError);
         return 0;
     }
     else{
-        if(strcmp(argv[1],"status") == 0){
-            // code for status option
+        if(argc == 2){
+            if(strcmp(argv[1],"status") == 0){
+                // code for status option
+                // creation of named pipe
+                // checkStatus(PIPE_READ,PIPE_WRITE);
+            }
+            else printError(argError);
         }
         else if (strcmp(argv[1],"proc-file") == 0){
             // code for proc-file option
-
+            // creation of named pipe
         }
-        else
-            write(STDOUT_FILENO, argError, sizeof(argError));
+        else printError(argError);
     }
     return 0;
 }

@@ -1,2 +1,4 @@
 *.o
 SDStore-transf.zip
+*.json
+aux_leite
