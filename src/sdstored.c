@@ -6,6 +6,7 @@ ARGUMENTOS SERVDOR:
 
 // Server
 #include "helper.h"
+#include <stdlib.h>
 #define serverError "[ERROR] Server not running.\n"
 #define SIZE 256
 
