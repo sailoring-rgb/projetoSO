@@ -23,15 +23,11 @@ void printError(char error[]){
 }
 
 // Function for reading lines in files
-ssize_t readln(int fd, char *line, size_t size){
-    ssize_t read_bytes, total_read_bytes = 0;
-    
-    while(total_read_bytes < size -1){
-        read_bytes = read(fd,&line[total_read_bytes],sizeof(char));
-        if (read_bytes < 0) break;
-        if(line[total_read_bytes++] == '\n') break;
-    }
-    line[total_read_bytes] = '\0';
-
-    return total_read_bytes;
+int readLine(int src, char *dest){
+    int bytesRead = 0;
+    char local[1] = "";
+    while(read(src, local, 1) > 0 && local[0] != '\n')
+        dest[bytesRead++] = local[0];
+    dest[bytesRead] = '\0';
+    return bytesRead;
 }
