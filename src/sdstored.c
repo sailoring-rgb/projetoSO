@@ -63,19 +63,17 @@ int loadServer(char const * path[], Trans * tr){
 }
 
 int main(int argc, char *argv[]){
-    if(argc != 2){
+    if(argc != 3){
         printError(argCountError);
         return 0;
     }
     else{
-        // OPEN AND LOAD SERVER CONFIGURATION
+        // Loading server configuration
         Trans sc = NULL;
         if(!loadServer(argv, &sc)){
             printError(serverError);
             return 0;
         }
-        // PERFORM WORK ON THE SERVER
-        // OPEN TRANSFORMATION FOLDERS
     }
     return 0;
 }
