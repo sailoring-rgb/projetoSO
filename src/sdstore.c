@@ -3,8 +3,8 @@ ARGUMENTS:
     -> status
         * check transformation status
     -> proc-file path_input_file path_output_file transformationList[]
-        * path_input_file: file to transform
-        * path_output_file: path to save transformed file
+        * path_input_file: relative path to file to transform
+        * path_output_file: relative path to save transformed file
         * transformationList[]: list of transformations
 */
 
@@ -28,12 +28,13 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int read_bytes, pid, channel, fifo_writer, fifo_reader;
+    int read_bytes, pid, fifo_writer, fifo_reader;
     char pid_reader[32];
     char pid_writer[32];
     char buffer[MAX_BUFF_SIZE];
 
     pid = getpid();
+
     sprintf(pid_reader,"tmp/%d_reader",pid);
     sprintf(pid_writer,"tmp/%d_writer",pid);
 
@@ -46,6 +47,9 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
+    write(channel, &pid, sizeof(pid));
+    close(channel);
+
     fifo_writer = open(pid_writer, O_WRONLY);
     fifo_reader = open(pid_reader, O_RDONLY);
 
@@ -53,12 +57,10 @@ int main(int argc, char *argv[]){
         if(strcmp(argv[1], "status") == 0)
             checkStatus(fifo_reader,fifo_writer);
         else printError(argError);
-
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        close(channel);
         return 0;
     }
 
@@ -68,9 +70,7 @@ int main(int argc, char *argv[]){
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        close(channel);
         return 0;
-
     }
 
     if(strcmp(argv[1], "proc-file") != 0 || validateRequest(argc, argv)){
@@ -79,7 +79,6 @@ int main(int argc, char *argv[]){
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        close(channel);
         return 0;
     }
 
@@ -90,6 +89,7 @@ int main(int argc, char *argv[]){
 
     while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) >0){
         write(STDOUT_FILENO, buffer, read_bytes);
+        fflush(stdout);
         buffer[0] = '\0';
     }
 
@@ -97,7 +97,6 @@ int main(int argc, char *argv[]){
     close(fifo_writer);
     unlink(pid_reader);
     unlink(pid_writer);
-    close(channel);
 
     return 0;
 }

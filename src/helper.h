@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define argError "[ERROR] Invalid arguments.\n"
@@ -17,8 +18,8 @@
 #define MAX_BUFF_SIZE 1024
 
 // Global variables
-char fifo[] = "tmp/fifo";
-
+char fifo[] = "../tmp/fifo";
+int channel;
 
 // Function for viewing status information
 void checkStatus(int reader, int writer){
@@ -28,7 +29,7 @@ void checkStatus(int reader, int writer){
     write(writer, "status", strlen("status"));
 
     while((read_bytes = read(reader, buffer, MAX_BUFF_SIZE)) > 0 )
-        write(STDOUT_FILENO,buffer,read_bytes);
+        write(STDOUT_FILENO, buffer ,read_bytes);
 }
 
 // Function for printing errors
@@ -38,10 +39,10 @@ void printError(char error[]){
 
 // Function for reading lines in files
 int readLine(int src, char *dest){
-    int bytesRead = 0;
-    char local[1] = "";
-    while(read(src, local, 1) > 0 && local[0] != '\n')
-        dest[bytesRead++] = local[0];
-    dest[bytesRead] = '\0';
-    return bytesRead;
+    int read_bytes = 0;
+    char tmp[1] = "";
+    while(read(src, tmp, 1) > 0 && tmp[0] != '\n')
+        dest[read_bytes++] = tmp[0];
+    dest[read_bytes] = '\0';
+    return read_bytes;
 }

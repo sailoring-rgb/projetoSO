@@ -1,15 +1,11 @@
-/*
-ARGUMENTOS SERVDOR:
-    -> path do ficheiro de configuração
-    -> path dos executáveis das transformações
+/* **** SERVER **** 
+ARGUMENTS:
+    -> path_config path_exec
+        * path_config: relative path for configuration file
+        * path_exec: relative path for transformations executables
 */
 
-// Server
 #include "helper.h"
-
-
-// Global variables
-int channel;
 
 // Transformation information
 typedef struct Transformation{
@@ -113,7 +109,7 @@ int main(int argc, char *argv[]){
         printError(serverError);
         return 0;
     }
-    /*
+
     // Creating communication channel
     if(mkfifo(fifo, 0666) == -1){
         printError(fifoError);
@@ -123,7 +119,7 @@ int main(int argc, char *argv[]){
     channel = open(fifo, O_RDWR);
 
     signal(SIGTERM, sigterm_handler);
-    */ 
+
 
     /*
     GENERAL WORKFLOW:
@@ -140,7 +136,6 @@ int main(int argc, char *argv[]){
     // [FATHER] VALIDATION OF REQUESTS
     // [CHILD] EXECUTE REQUEST
 
-
     /*
     // **** FOR TESTING ****
     Trans * tr = &sc;
@@ -152,6 +147,7 @@ int main(int argc, char *argv[]){
     }
     */
 
-    //unlink(fifo);
+    close(channel);
+    unlink(fifo);
     return 0;
 }
