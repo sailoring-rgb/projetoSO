@@ -1,20 +1,33 @@
 #include <unistd.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define argError "[ERROR] Invalid arguments.\n"
+#define serverError "[ERROR] Server not running.\n"
+#define fifoError "[ERROR] Can't create fifo.\n"
+#define requestError "Invalid request.\n"
+
 #define MAX_BUFF_SIZE 1024
+
+// Global variables
+char fifo[] = "tmp/fifo";
 
 
 // Function for viewing status information
-void checkStatus(int r_fd, int w_fd){
+void checkStatus(int reader, int writer){
     char buffer[MAX_BUFF_SIZE];
     int read_bytes;
 
-    write(w_fd, "status", strlen("status"));
-    while((read_bytes = read(r_fd, buffer, MAX_BUFF_SIZE)) > 0 )
+    write(writer, "status", strlen("status"));
+
+    while((read_bytes = read(reader, buffer, MAX_BUFF_SIZE)) > 0 )
         write(STDOUT_FILENO,buffer,read_bytes);
 }
 

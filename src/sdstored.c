@@ -6,12 +6,10 @@ ARGUMENTOS SERVDOR:
 
 // Server
 #include "helper.h"
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <stdio.h>
 
-#define serverError "[ERROR] Server not running.\n"
+
+// Global variables
+int channel;
 
 // Transformation information
 typedef struct Transformation{
@@ -47,7 +45,7 @@ Trans addTransformation(Trans t, char s[], char const * path){
 
 
 // Function for server configurations
-int loadServer(char const * path[], Trans * tr){
+int loadServer(char * path[], Trans * tr){
     char buffer[MAX_BUFF_SIZE];
     Trans tmp_tr = NULL;
 
@@ -95,10 +93,15 @@ bool updateResource(Trans * tr, char * name, char * opt){
     return res;
 }
 
+// Routine for handling sigterm
+void sigterm_handler(int sig){
+    close(channel);
+}
+
 
 int main(int argc, char *argv[]){
     // Checking for argc
-    if(argc != 3){
+    if(argc < 3 || argc > 3){
         printError(argCountError);
         return 0;
     }
@@ -110,8 +113,17 @@ int main(int argc, char *argv[]){
         printError(serverError);
         return 0;
     }
-    
-    // OPEN FIFO AND READ FROM IT
+    /*
+    // Creating communication channel
+    if(mkfifo(fifo, 0666) == -1){
+        printError(fifoError);
+        return 0;
+    }
+
+    channel = open(fifo, O_RDWR);
+
+    signal(SIGTERM, sigterm_handler);
+    */ 
 
     /*
     GENERAL WORKFLOW:
@@ -140,5 +152,6 @@ int main(int argc, char *argv[]){
     }
     */
 
+    //unlink(fifo);
     return 0;
 }
