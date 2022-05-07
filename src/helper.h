@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define argError "[ERROR] Invalid arguments.\n"

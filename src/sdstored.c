@@ -8,12 +8,14 @@ ARGUMENTOS SERVDOR:
 #include "helper.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdio.h>
+
 #define serverError "[ERROR] Server not running.\n"
-#define SIZE 128
 
 // Transformation information
 typedef struct Transformation{
-    char operation_name[SIZE];
+    char operation_name[64];
     int max_operation_allowed;
     int currently_running;
     struct Trans * prox;
@@ -35,7 +37,7 @@ Trans makeTrans(char s[], char const *path){
 // Function to add a transformation
 Trans addTransformation(Trans t, char s[], char const * path){
     Trans new = makeTrans(s, path);
-    Trans *ptr = &t;
+    Trans * ptr = &t;
     while(*ptr && strcmp((*ptr)->operation_name, new->operation_name) < 0)
         ptr = & ((*ptr)->prox);
     new->prox = (*ptr);
@@ -62,18 +64,81 @@ int loadServer(char const * path[], Trans * tr){
     return 1;
 }
 
+// Function for cheking if resources are free
+bool checkResources(Trans * tr, char * name){
+    while(* tr && (strcmp((*tr)->operation_name, name) != 0))
+        tr = & ((*tr)->prox);
+    
+    if(* tr){
+        if ((*tr)->currently_running < (*tr)->max_operation_allowed)
+            return true;
+    }
+    return false;
+}
+
+// Function for updating resources
+bool updateResource(Trans * tr, char * name, char * opt){
+    bool res = false;
+    while(* tr && (strcmp((*tr)->operation_name, name) != 0))
+        tr = & ((*tr)->prox);
+    
+    if(* tr){
+        if (strcmp(opt, "occupy") == 0){
+            (*tr)->currently_running ++;
+            res = true;
+            }
+        else if (strcmp(opt, "free") == 0){
+            (*tr)->currently_running --;
+            res = true;
+            }
+    }
+    return res;
+}
+
+
 int main(int argc, char *argv[]){
+    // Checking for argc
     if(argc != 3){
         printError(argCountError);
         return 0;
     }
-    else{
-        // Loading server configuration
-        Trans sc = NULL;
-        if(!loadServer(argv, &sc)){
-            printError(serverError);
-            return 0;
-        }
+
+    Trans sc = NULL;
+
+    // Loading server configuration
+    if(!loadServer(argv, &sc)){
+        printError(serverError);
+        return 0;
     }
+    
+    // OPEN FIFO AND READ FROM IT
+
+    /*
+    GENERAL WORKFLOW:
+    -> MAIN PROCESS: CHECK REQUEST
+    -> SWITCH(REQUEST)
+        -> CASE "STATUS":
+            -> FORK 
+        -> CASE "TRANSFORMATION":
+            -> CHECK FOR AVAILABLE RESOURCES
+                -> IF TRUE: FORK
+                -> ELSE: PUT ON QUEUE
+    */
+
+    // [FATHER] VALIDATION OF REQUESTS
+    // [CHILD] EXECUTE REQUEST
+
+
+    /*
+    // **** FOR TESTING ****
+    Trans * tr = &sc;
+
+    while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
+        tr = & ((*tr)->prox);
+    if(* tr){
+        // WRITE SMTHING HERE
+    }
+    */
+
     return 0;
 }
