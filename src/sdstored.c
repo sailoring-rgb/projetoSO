@@ -6,6 +6,8 @@ ARGUMENTS:
 */
 
 #include "helper.h"
+#define path_SDStore "SDStore-transf/"
+#define forkError "[ERROR] Fork unsuccessful.\n"
 
 // Transformation information
 typedef struct Transformation{
@@ -39,6 +41,27 @@ Trans addTransformation(Trans t, char s[], char const * path){
     return t;
 }
 
+// Function to create pipes
+void makePipes(int file_des[][2], int nrPipes){
+    int i;
+    for(i = 0; i < nrPipes; i++)
+        pipe(file_des[i]);
+}
+
+// Function to close pipes
+void closePipes(int file_des[][2], int nrPipes){
+    int i;
+    for (i= 0; i < nrPipes; i++){
+        close(file_des[i][0]);
+        close(file_des[i][1]);
+    }
+}
+
+// Aply a given transformation
+bool transformFile(char * file_path, char * transList[], int nrTrans){
+    // OPEN File, apply transformations, close
+    return true;
+}
 
 // Function for server configurations
 int loadServer(char * path[], Trans * tr){
@@ -59,34 +82,16 @@ int loadServer(char * path[], Trans * tr){
 }
 
 // Function for cheking if resources are free
-bool checkResources(Trans * tr, char * name){
+bool checkResources(Trans * tr, char * name, int nrTrans){
     while(* tr && (strcmp((*tr)->operation_name, name) != 0))
         tr = & ((*tr)->prox);
     
     if(* tr){
-        if ((*tr)->currently_running < (*tr)->max_operation_allowed)
+        if (((*tr)->currently_running + nrTrans) < (*tr)->max_operation_allowed)
             return true;
     }
-    return false;
-}
 
-// Function for updating resources
-bool updateResource(Trans * tr, char * name, char * opt){
-    bool res = false;
-    while(* tr && (strcmp((*tr)->operation_name, name) != 0))
-        tr = & ((*tr)->prox);
-    
-    if(* tr){
-        if (strcmp(opt, "occupy") == 0){
-            (*tr)->currently_running ++;
-            res = true;
-            }
-        else if (strcmp(opt, "free") == 0){
-            (*tr)->currently_running --;
-            res = true;
-            }
-    }
-    return res;
+    return false;
 }
 
 // Routine for handling sigterm
@@ -98,7 +103,7 @@ void sigterm_handler(int sig){
 int main(int argc, char *argv[]){
     // Checking for argc
     if(argc < 3 || argc > 3){
-        printError(argCountError);
+        printMessage(argCountError);
         return 0;
     }
 
@@ -106,46 +111,54 @@ int main(int argc, char *argv[]){
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
-        printError(serverError);
+        printMessage(serverError);
         return 0;
     }
 
     // Creating communication channel
     if(mkfifo(fifo, 0666) == -1){
-        printError(fifoError);
+        printMessage(fifoError);
         return 0;
     }
 
+    int pid, fifo_reader, fifo_writer, read_bytes;
+    char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
 
     signal(SIGTERM, sigterm_handler);
 
+    while(read(channel, &pid, sizeof(pid)) > 0){
+        switch((fork())){
+        case -1:
+            printMessage(forkError);
+            return false;
+        case 0:
+            //[SON]
+            sprintf(pid_reading,"tmp/%dR",pid);
+            sprintf(pid_writing,"tmp/%dW",pid);
+            fifo_reader = open(pid_reading, O_RDONLY);
+            fifo_writer = open(pid_writing, O_WRONLY);
+            read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
+            buffer[read_bytes] = '\0';
 
-    /*
-    GENERAL WORKFLOW:
-    -> MAIN PROCESS: CHECK REQUEST
-    -> SWITCH(REQUEST)
-        -> CASE "STATUS":
-            -> FORK 
-        -> CASE "TRANSFORMATION":
-            -> CHECK FOR AVAILABLE RESOURCES
-                -> IF TRUE: FORK
-                -> ELSE: PUT ON QUEUE
-    */
-
-    // [FATHER] VALIDATION OF REQUESTS
-    // [CHILD] EXECUTE REQUEST
-
-    /*
-    // **** FOR TESTING ****
-    Trans * tr = &sc;
-
-    while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
-        tr = & ((*tr)->prox);
-    if(* tr){
-        // WRITE SMTHING HERE
+            if(strcmp(buffer, "status") == 0){
+                // mostrar o estado dos pedidos here
+            }
+            else{
+                /*
+                executar transformações
+                -> verificar se há recursos
+                    * se não houver: escrever "pending" para o fifo
+                    * quando houver avisar que está a ser executado
+                */
+            }
+            close(fifo_reader);
+            close(fifo_writer);
+            _exit(0);
+        default:
+            break;
+        }
     }
-    */
 
     close(channel);
     unlink(fifo);

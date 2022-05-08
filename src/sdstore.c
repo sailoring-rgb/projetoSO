@@ -24,7 +24,7 @@ bool validateRequest(int argc, char *argv[]){
 
 int main(int argc, char *argv[]){
     if(argc < 2){
-        printError(argCountError);
+        printMessage(argCountError);
         return 0;
     }
 
@@ -43,7 +43,7 @@ int main(int argc, char *argv[]){
 
     
     if((channel = open(fifo, O_WRONLY)) < 0){
-        printError(serverError);
+        printMessage(serverError);
         return 0;
     }
 
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]){
     if(argc == 2){
         if(strcmp(argv[1], "status") == 0)
             checkStatus(fifo_reader,fifo_writer);
-        else printError(argError);
+        else printMessage(argError);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
@@ -65,7 +65,7 @@ int main(int argc, char *argv[]){
     }
 
     if(argc < 5){
-        printError(argError);
+        printMessage(argError);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]){
     }
 
     if(strcmp(argv[1], "proc-file") != 0 || validateRequest(argc, argv)){
-        printError(requestError);
+        printMessage(requestError);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);

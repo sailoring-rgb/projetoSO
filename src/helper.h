@@ -33,8 +33,8 @@ void checkStatus(int reader, int writer){
 }
 
 // Function for printing errors
-void printError(char error[]){
-    write(STDOUT_FILENO, error, strlen(error));
+void printMessage(char msg[]){
+    write(STDOUT_FILENO, msg, strlen(msg));
 }
 
 // Function for reading lines in files
