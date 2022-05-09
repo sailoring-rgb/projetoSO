@@ -15,8 +15,16 @@ typedef struct Transformation{
     char operation_name[64];
     int max_operation_allowed;
     int currently_running;
-    struct Trans * prox;
+    struct Trans * next;
 } * Trans;
+
+// Task information
+typedef struct Task{
+    int id;
+    char command[128];
+    char status[16];
+    struct Task * next;
+} * Task;
 
 // Function to create a transformation
 Trans makeTrans(char s[], char const *path){
@@ -27,7 +35,7 @@ Trans makeTrans(char s[], char const *path){
     token = strtok(NULL, " ");
     t->max_operation_allowed = atoi(token);
     t->currently_running = 0;
-    t->prox = NULL;
+    t->next = NULL;
     return t;
 }
 
@@ -36,10 +44,38 @@ Trans addTransformation(Trans t, char s[], char const * path){
     Trans new = makeTrans(s, path);
     Trans * ptr = &t;
     while(*ptr && strcmp((*ptr)->operation_name, new->operation_name) < 0)
-        ptr = & ((*ptr)->prox);
-    new->prox = (*ptr);
+        ptr = & ((*ptr)->next);
+    new->next = (*ptr);
     (*ptr) = new;
     return t;
+}
+
+// Function to add a task
+Task addTask(Task t, char const * path){
+    /*
+    Add task at the end of the linked list
+    save previous nr
+    set status as executing (?)
+    */
+    int task_nr = 0;
+    Task * ptr = &t;
+
+    while(*ptr){
+        ptr = &((*ptr)->next);
+    }
+
+    if (*ptr){
+        task_nr = (*ptr)->id;
+    }
+
+    Task new = malloc(sizeof(struct Task));
+    strcpy(path, new->command);
+    new->id = task_nr;
+    strcpy("executing", new->command);
+    // right now its at the beginning
+    new->next = (*ptr);
+    (*ptr) = new;
+    return new;
 }
 
 // Function to create pipes
@@ -85,7 +121,7 @@ int loadServer(char * path[], Trans * tr){
 // Function for cheking if resources are free
 bool checkResources(Trans * tr, char * name, int nrTrans){
     while(* tr && (strcmp((*tr)->operation_name, name) != 0))
-        tr = & ((*tr)->prox);
+        tr = & ((*tr)->next);
     
     if(* tr)
         if (((*tr)->currently_running + nrTrans) < (*tr)->max_operation_allowed)
@@ -118,7 +154,7 @@ void sendStatus(int writer, Trans * tr){
     write(writer, buff, total_bytes);
     buff[0]= "\0";
 
-    tr = & ((*tr)->prox);
+    tr = & ((*tr)->next);
     }
 }
 
@@ -147,8 +183,9 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int pid, fifo_reader, fifo_writer, read_bytes;
+    int pid, fifo_reader, fifo_writer, read_bytes, nr_requests;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
+    char * requests[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
@@ -167,9 +204,12 @@ int main(int argc, char *argv[]){
 
             if(strcmp(buffer, "status") == 0){
                 sendStatus(fifo_writer, &sc);
-                // mostrar o estado dos pedidos here
             }
             else{
+                char newTask[MAX_BUFF_SIZE] = "transform ";
+                strcpy(newTask, buffer);
+                nr_requests = lineSplitter(buffer, requests);
+
                 /*
                 executar transformações
                 -> verificar se há recursos
@@ -192,7 +232,7 @@ int main(int argc, char *argv[]){
     Trans * tr = &sc;
 
     while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
-        tr = & ((*tr)->prox);
+        tr = & ((*tr)->next);
     if(* tr){
         // WRITE SMTHING HERE
     }

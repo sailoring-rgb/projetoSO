@@ -35,3 +35,19 @@ int readLine(int src, char *dest){
     dest[read_bytes] = '\0';
     return read_bytes;
 }
+
+// Function for splitting lines into tokens
+int lineSplitter(char src[], char *dest[]){
+    char * token;
+    int size_dest = 0;
+
+    token = strtok(src, " ");
+    while(token){
+        dest[size_dest] = token;
+        token = strtok(NULL, " ");
+        size_dest++;
+    }
+
+    return size_dest;
+
+}
