@@ -12,6 +12,7 @@ ARGUMENTS:
 
 bool reading_allowed;
 int total_nr_tasks;
+
 // Transformation information
 typedef struct Transformation{
     char operation_name[64];
@@ -73,6 +74,7 @@ Task addTask(Task t, char name[]){
     (*ptr) = new;
     return t;
 }
+
 // Function to load a task
 int loadTask(char name[], Task * tk){
     Task tmp_tk = NULL;
@@ -203,7 +205,6 @@ int main(int argc, char *argv[]){
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     char * requests[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
-    reading_allowed = true;
     total_nr_tasks = 0;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
@@ -224,9 +225,9 @@ int main(int argc, char *argv[]){
                 sendStatus(fifo_writer, &sc, &tasks);
             }
             else{
-                char newTask[MAX_BUFF_SIZE] = "transform ";
-                strcpy(newTask, buffer);
-                nr_requests = lineSplitter(buffer, requests);
+                //loadTask("buffer", &tasks);
+                //nr_requests = lineSplitter(buffer, requests);
+                //sleep(10);
 
                 /*
                 executar transformações
