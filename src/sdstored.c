@@ -10,6 +10,7 @@ ARGUMENTS:
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 
+bool reading_allowed;
 // Transformation information
 typedef struct Transformation{
     char operation_name[64];
@@ -136,15 +137,11 @@ void sigterm_handler(int sig){
 }
 
 // Function to show server status
-void sendStatus(int writer, Trans * tr){
+void sendStatus(int writer, Trans * tr, Task * t){
     char buff[MAX_BUFF_SIZE]= "";
     int total_bytes = 0;
+
     while(* tr){
-        /*
-    sprintf(buff, "%s :", (*tr)->operation_name);
-    sprintf(buff, "max[%d] | ", (*tr)->max_operation_allowed);
-    sprintf(buff, "running[%d]\n", (*tr)->currently_running);
-    */
     total_bytes = sprintf(
         buff, "[Transformation] %s: %d/%d running/max\n",
         (*tr)->operation_name, 
@@ -155,6 +152,19 @@ void sendStatus(int writer, Trans * tr){
     buff[0]= "\0";
 
     tr = & ((*tr)->next);
+    }
+
+    while(* t){
+    total_bytes = sprintf(
+        buff, "[Task] %d: %s\n%s\n",
+        (*t)->id,
+        (*t)->command,
+        (*t)->status);
+
+    write(writer, buff, total_bytes);
+    buff[0]= "\0";
+    
+    t = & ((*t)->next);
     }
 }
 
@@ -167,6 +177,7 @@ int main(int argc, char *argv[]){
     }
 
     Trans sc = NULL;
+    Task tasks = NULL;
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
@@ -187,6 +198,7 @@ int main(int argc, char *argv[]){
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     char * requests[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
+    reading_allowed = true;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         switch(fork()){
@@ -203,7 +215,7 @@ int main(int argc, char *argv[]){
             buffer[read_bytes] = '\0';
 
             if(strcmp(buffer, "status") == 0){
-                sendStatus(fifo_writer, &sc);
+                sendStatus(fifo_writer, &sc, &tasks);
             }
             else{
                 char newTask[MAX_BUFF_SIZE] = "transform ";
