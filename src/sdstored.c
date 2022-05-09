@@ -11,6 +11,7 @@ ARGUMENTS:
 #define signalError "[ERROR] Signal handler not established.\n"
 
 bool reading_allowed;
+int total_nr_tasks;
 // Transformation information
 typedef struct Transformation{
     char operation_name[64];
@@ -28,7 +29,7 @@ typedef struct Task{
 } * Task;
 
 // Function to create a transformation
-Trans makeTrans(char s[], char const *path){
+Trans makeTrans(char s[]){
     Trans t = malloc(sizeof(struct Transformation));
     char * token;
     token = strtok(s, " ");
@@ -41,42 +42,14 @@ Trans makeTrans(char s[], char const *path){
 }
 
 // Function to add a transformation
-Trans addTransformation(Trans t, char s[], char const * path){
-    Trans new = makeTrans(s, path);
+Trans addTransformation(Trans t, char s[]){
+    Trans new = makeTrans(s);
     Trans * ptr = &t;
     while(*ptr && strcmp((*ptr)->operation_name, new->operation_name) < 0)
         ptr = & ((*ptr)->next);
     new->next = (*ptr);
     (*ptr) = new;
     return t;
-}
-
-// Function to add a task
-Task addTask(Task t, char const * path){
-    /*
-    Add task at the end of the linked list
-    save previous nr
-    set status as executing (?)
-    */
-    int task_nr = 0;
-    Task * ptr = &t;
-
-    while(*ptr){
-        ptr = &((*ptr)->next);
-    }
-
-    if (*ptr){
-        task_nr = (*ptr)->id;
-    }
-
-    Task new = malloc(sizeof(struct Task));
-    strcpy(path, new->command);
-    new->id = task_nr;
-    strcpy("executing", new->command);
-    // right now its at the beginning
-    new->next = (*ptr);
-    (*ptr) = new;
-    return new;
 }
 
 // Function to create pipes
@@ -112,7 +85,7 @@ int loadServer(char * path[], Trans * tr){
         return 0;
     
     while(readLine(config_fd, buffer))
-        tmp_tr = addTransformation(tmp_tr,buffer,path[2]);
+        tmp_tr = addTransformation(tmp_tr,buffer);
     
     close(config_fd);
     * tr = tmp_tr;
@@ -199,6 +172,11 @@ int main(int argc, char *argv[]){
     char * requests[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
     reading_allowed = true;
+    total_nr_tasks = 0;
+    Task t = NULL;
+
+    //t = addTask(&t, "teste");
+    total_nr_tasks++;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         switch(fork()){
