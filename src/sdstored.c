@@ -52,6 +52,38 @@ Trans addTransformation(Trans t, char s[]){
     return t;
 }
 
+// Function to create a task
+Task makeTask(char name[]){
+    Task t = malloc(sizeof(struct Task));
+    strcpy(t->command, name);
+    strcpy(t->status, "n/a");
+    total_nr_tasks ++;
+    t->id = total_nr_tasks;
+    t->next = NULL;
+    return t;
+}
+
+// Function to add tasks
+Task addTask(Task t, char name[]){
+    Trans new = makeTask(name);
+    Trans * ptr = &t;
+    while(*ptr)
+        ptr = & ((*ptr)->next);
+    new->next = (*ptr);
+    (*ptr) = new;
+    return t;
+}
+// Function to load a task
+int loadTask(char name[], Task * tk){
+    Task tmp_tk = NULL;
+
+    tmp_tk = addTask(tmp_tk, name);
+    while(* tk)
+        tk = & ((*tk)->next);
+    * tk = tmp_tk;
+    return 1;
+}
+
 // Function to create pipes
 void makePipes(int file_des[][2], int nrPipes){
     int i;
@@ -173,10 +205,6 @@ int main(int argc, char *argv[]){
     channel = open(fifo, O_RDWR);
     reading_allowed = true;
     total_nr_tasks = 0;
-    Task t = NULL;
-
-    //t = addTask(&t, "teste");
-    total_nr_tasks++;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         switch(fork()){
