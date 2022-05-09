@@ -29,8 +29,8 @@ void checkStatus(int reader, int writer){
 
     write(writer, "status", strlen("status"));
 
-    read_bytes = read(reader, buffer, MAX_BUFF_SIZE);
-    write(STDOUT_FILENO, buffer ,read_bytes);
+    while((read_bytes = read(reader, buffer, MAX_BUFF_SIZE)) > 0 )
+        write(STDOUT_FILENO, buffer ,read_bytes);
 }
 
 int main(int argc, char *argv[]){
