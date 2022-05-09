@@ -86,10 +86,9 @@ bool checkResources(Trans * tr, char * name, int nrTrans){
     while(* tr && (strcmp((*tr)->operation_name, name) != 0))
         tr = & ((*tr)->prox);
     
-    if(* tr){
+    if(* tr)
         if (((*tr)->currently_running + nrTrans) < (*tr)->max_operation_allowed)
             return true;
-    }
 
     return false;
 }
@@ -100,8 +99,26 @@ void sigterm_handler(int sig){
 }
 
 // Function to show server status
-void sendStatus(int writer){
-    write(writer, "oi\n", sizeof("oi\n"));
+void sendStatus(int writer, Trans * tr){
+    char buff[MAX_BUFF_SIZE]= "";
+    int total_bytes = 0;
+    while(* tr){
+        /*
+    sprintf(buff, "%s :", (*tr)->operation_name);
+    sprintf(buff, "max[%d] | ", (*tr)->max_operation_allowed);
+    sprintf(buff, "running[%d]\n", (*tr)->currently_running);
+    */
+    total_bytes = sprintf(
+        buff, "[Transformation] %s: %d/%d running/max\n",
+        (*tr)->operation_name, 
+        (*tr)->currently_running,
+        (*tr)->max_operation_allowed);
+
+    write(writer, buff, total_bytes);
+    buff[0]= "\0";
+
+    tr = & ((*tr)->prox);
+    }
 }
 
 
@@ -120,6 +137,8 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
+    signal(SIGTERM, sigterm_handler);
+
     // Creating communication channel
     if(mkfifo(fifo, 0666) == -1){
         printMessage(fifoError);
@@ -129,8 +148,6 @@ int main(int argc, char *argv[]){
     int pid, fifo_reader, fifo_writer, read_bytes;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
-
-    signal(SIGTERM, sigterm_handler);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         switch(fork()){
@@ -147,7 +164,7 @@ int main(int argc, char *argv[]){
             buffer[read_bytes] = '\0';
 
             if(strcmp(buffer, "status") == 0){
-                sendStatus(fifo_writer);
+                sendStatus(fifo_writer, &sc);
                 // mostrar o estado dos pedidos here
             }
             else{
@@ -167,3 +184,14 @@ int main(int argc, char *argv[]){
     unlink(fifo);
     return 0;
 }
+
+  /*
+    // **** FOR TESTING ****
+    Trans * tr = &sc;
+
+    while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
+        tr = & ((*tr)->prox);
+    if(* tr){
+        // WRITE SMTHING HERE
+    }
+    */
