@@ -8,6 +8,7 @@ ARGUMENTS:
 #include "helper.h"
 #define path_SDStore "SDStore-transf/"
 #define forkError "[ERROR] Fork unsuccessful.\n"
+#define signalError "[ERROR] Signal handler not established.\n"
 
 // Transformation information
 typedef struct Transformation{
@@ -137,7 +138,8 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    signal(SIGTERM, sigterm_handler);
+    if (signal(SIGINT, sigterm_handler) == SIG_ERR)
+        printMessage(signalError);
 
     // Creating communication channel
     if(mkfifo(fifo, 0666) == -1){
