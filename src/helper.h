@@ -21,17 +21,6 @@
 char fifo[] = "../tmp/fifo";
 int channel;
 
-// Function for viewing status information
-void checkStatus(int reader, int writer){
-    char buffer[MAX_BUFF_SIZE];
-    int read_bytes;
-
-    write(writer, "status", strlen("status"));
-
-    while((read_bytes = read(reader, buffer, MAX_BUFF_SIZE)) > 0 )
-        write(STDOUT_FILENO, buffer ,read_bytes);
-}
-
 // Function for printing errors
 void printMessage(char msg[]){
     write(STDOUT_FILENO, msg, strlen(msg));

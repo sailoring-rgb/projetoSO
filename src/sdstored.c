@@ -99,6 +99,11 @@ void sigterm_handler(int sig){
     close(channel);
 }
 
+// Function to show server status
+void sendStatus(int writer){
+    write(writer, "oi\n", sizeof("oi\n"));
+}
+
 
 int main(int argc, char *argv[]){
     // Checking for argc
@@ -128,20 +133,21 @@ int main(int argc, char *argv[]){
     signal(SIGTERM, sigterm_handler);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
-        switch((fork())){
+        switch(fork()){
         case -1:
             printMessage(forkError);
             return false;
         case 0:
             //[SON]
-            sprintf(pid_reading,"tmp/%dR",pid);
-            sprintf(pid_writing,"tmp/%dW",pid);
-            fifo_reader = open(pid_reading, O_RDONLY);
-            fifo_writer = open(pid_writing, O_WRONLY);
+            sprintf(pid_reading,"../tmp/%d_reader",pid);
+            sprintf(pid_writing,"../tmp/%d_writer",pid);
+            fifo_reader = open(pid_writing, O_RDONLY);
+            fifo_writer = open(pid_reading, O_WRONLY);
             read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
             buffer[read_bytes] = '\0';
 
             if(strcmp(buffer, "status") == 0){
+                sendStatus(fifo_writer);
                 // mostrar o estado dos pedidos here
             }
             else{
@@ -155,12 +161,9 @@ int main(int argc, char *argv[]){
             close(fifo_reader);
             close(fifo_writer);
             _exit(0);
-        default:
-            break;
         }
     }
 
-    close(channel);
     unlink(fifo);
     return 0;
 }

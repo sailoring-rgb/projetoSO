@@ -22,6 +22,17 @@ bool validateRequest(int argc, char *argv[]){
     return res;
 }
 
+// Function for viewing status information
+void checkStatus(int reader, int writer){
+    char buffer[MAX_BUFF_SIZE];
+    int read_bytes;
+
+    write(writer, "status", strlen("status"));
+
+    read_bytes = read(reader, buffer, MAX_BUFF_SIZE);
+    write(STDOUT_FILENO, buffer ,read_bytes);
+}
+
 int main(int argc, char *argv[]){
     if(argc < 2){
         printMessage(argCountError);
@@ -35,12 +46,13 @@ int main(int argc, char *argv[]){
 
     pid = getpid();
 
-    sprintf(pid_reader,"tmp/%d_reader",pid);
-    sprintf(pid_writer,"tmp/%d_writer",pid);
+    sprintf(pid_reader, "../tmp/%d_reader", pid);
+    sprintf(pid_writer, "../tmp/%d_writer", pid);
 
-    mkfifo(pid_reader, 0666);
-    mkfifo(pid_writer, 0666);
-
+    if(mkfifo(pid_reader, 0666) == -1 || mkfifo(pid_writer, 0666) == -1){
+        printMessage(fifoError);
+        return 0;
+    }
     
     if((channel = open(fifo, O_WRONLY)) < 0){
         printMessage(serverError);
@@ -48,14 +60,14 @@ int main(int argc, char *argv[]){
     }
 
     write(channel, &pid, sizeof(pid));
-    close(channel);
 
     fifo_writer = open(pid_writer, O_WRONLY);
     fifo_reader = open(pid_reader, O_RDONLY);
 
     if(argc == 2){
-        if(strcmp(argv[1], "status") == 0)
+        if(strcmp(argv[1], "status") == 0){
             checkStatus(fifo_reader,fifo_writer);
+            }
         else printMessage(argError);
         close(fifo_reader);
         close(fifo_writer);
@@ -87,7 +99,7 @@ int main(int argc, char *argv[]){
 
     write(fifo_writer, buffer, strlen(buffer));
 
-    while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) >0){
+    while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) > 0){
         write(STDOUT_FILENO, buffer, read_bytes);
         fflush(stdout);
         buffer[0] = '\0';
@@ -97,6 +109,7 @@ int main(int argc, char *argv[]){
     close(fifo_writer);
     unlink(pid_reader);
     unlink(pid_writer);
+    close(channel);
 
     return 0;
 }
