@@ -10,8 +10,6 @@ ARGUMENTS:
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 
-bool reading_allowed;
-int total_nr_tasks;
 
 // Transformation information
 typedef struct Transformation{
@@ -28,6 +26,11 @@ typedef struct Task{
     char status[16];
     struct Task * next;
 } * Task;
+
+bool reading_allowed;
+int total_nr_tasks;
+Trans sc;
+Task tasks;
 
 // Function to create a transformation
 Trans makeTrans(char s[]){
@@ -183,8 +186,8 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    Trans sc = NULL;
-    Task tasks = NULL;
+    sc = NULL;
+    tasks = NULL;
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
@@ -226,8 +229,7 @@ int main(int argc, char *argv[]){
             }
             else{
                 //loadTask("buffer", &tasks);
-                //nr_requests = lineSplitter(buffer, requests);
-                //sleep(10);
+                nr_requests = lineSplitter(buffer, requests);
 
                 /*
                 executar transformações
