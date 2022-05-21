@@ -227,6 +227,13 @@ int main(int argc, char *argv[]){
             addTask(tasks, total_nr_tasks, pid, buffer);
             total_nr_tasks++;
         }
+
+        /*
+            Verificar existência de recursos aqui;
+            Se não estiverem disponíveis, adicionar uma lista (com o PID do processo) para ser executado depois
+            Arranjar forma de dar trigger para ser executado
+            Quando passar a execução, informar cliente
+        */
         
         switch(fork()){
             case -1:
@@ -241,18 +248,15 @@ int main(int argc, char *argv[]){
                     sleep(10);
                     /*
                     executar transformações
-                    -> verificar se há recursos
-                        * se não houver: escrever "pending" para o fifo
-                        * quando houver avisar que está a ser executado
                     */
                 }
                 _exit(pid);
             default:
                 buffer[0] = '\0';
                 //updateTask(tasks, total_nr_tasks, pid, "concluded");
+                //total_nr_tasks--;
                 close(fifo_reader);
                 close(fifo_writer);
-           
         }
     }
 
