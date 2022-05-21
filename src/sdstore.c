@@ -1,4 +1,4 @@
-/* **** CLIENT **** 
+/* **************** CLIENT **************** 
 ARGUMENTS:
     -> status
         * check transformation status
@@ -8,13 +8,15 @@ ARGUMENTS:
         * transformationList[]: list of transformations
 */
 
-/* **** COMMANDS **** 
+/* **************** COMMANDS **************** 
     ./sdstore status
     ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste nop
 */
 
+// **************** INCLUDES **************** 
 #include "helper.h"
 
+// **************** FUNCTIONS **************** 
 // Function to check if the desired transformations are valid
 bool validateRequest(int argc, char *argv[]){
     bool res = true;
@@ -38,7 +40,7 @@ void checkStatus(int reader, int writer){
         write(STDOUT_FILENO, buffer, read_bytes);
 }
 
-// ***** MAIN *****
+// **************** MAIN ****************
 int main(int argc, char *argv[]){
     if(argc < 2){
         printMessage(argCountError);

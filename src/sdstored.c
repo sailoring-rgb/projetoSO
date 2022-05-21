@@ -1,20 +1,23 @@
-/* **** SERVER **** 
+/* **************** SERVER ****************
 ARGUMENTS:
     -> path_config path_exec
         * path_config: relative path for configuration file
         * path_exec: relative path for transformations executables
 */
 
-/* **** COMMANDS **** 
+/* **************** COMMANDS **************** 
     ./sdstored ../configs/sdstored.conf ../bin/SDStore-transf/
 */
 
+// **************** INCLUDES **************** 
 #include "helper.h"
+
+// **************** DEFINES **************** 
 #define path_SDStore "SDStore-transf/"
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 
-
+// **************** STRUCTS ****************
 // Transformation information
 typedef struct Transformation{
     char operation_name[64];
@@ -30,9 +33,10 @@ typedef struct Task{
     char status[16];
 } Task;
 
-// Global variables
+// **************** GLOBAL VARIABLES ****************
 int channel;
 
+// **************** FUNCTIONS ****************
 // Function to create a transformation
 Trans makeTrans(char s[]){
     Trans t = malloc(sizeof(struct Transformation));
@@ -71,12 +75,6 @@ void closePipes(int file_des[][2], int nrPipes){
         close(file_des[i][0]);
         close(file_des[i][1]);
     }
-}
-
-// Aply a given transformation
-bool transformFile(char * file_path, char * transList[], int nrTrans){
-    // OPEN File, apply transformations, close
-    return true;
 }
 
 // Function for server configurations
@@ -190,8 +188,7 @@ void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
     }
 }
 
-// Function to check if some information is not needed
-
+// Function to check if some information is outdated and can be overwritten
 int checkForSpot(Task * tasks, int max_nr_tasks){
     int res = -1;
     for(int i = 0; i < max_nr_tasks; i++){
@@ -203,7 +200,7 @@ int checkForSpot(Task * tasks, int max_nr_tasks){
     return res;
 }
 
-// ***** MAIN *****
+// **************** MAIN ****************
 int main(int argc, char *argv[]){
     // Checking for argc
     if(argc < 3 || argc > 3){

@@ -1,3 +1,4 @@
+// **************** INCLUDES **************** 
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -9,17 +10,18 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+// **************** DEFINES **************** 
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define argError "[ERROR] Invalid arguments.\n"
 #define serverError "[ERROR] Server not running.\n"
 #define fifoError "[ERROR] Can't create fifo.\n"
 #define requestError "[ERROR] Invalid request.\n"
-
 #define MAX_BUFF_SIZE 1024
 
-// Global variables
+// **************** GLOBAL VARIABLES ****************
 char fifo[] = "../tmp/fifo";
 
+// **************** FUNCTIONS ****************
 // Function for printing errors
 void printMessage(char msg[]){
     write(STDOUT_FILENO, msg, strlen(msg));
@@ -39,14 +41,11 @@ int readLine(int src, char *dest){
 int lineSplitter(char src[], char *dest[]){
     char * token;
     int size_dest = 0;
-
     token = strtok(src, " ");
     while(token){
         dest[size_dest] = token;
         token = strtok(NULL, " ");
         size_dest++;
     }
-
     return size_dest;
-
 }
