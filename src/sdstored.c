@@ -24,13 +24,9 @@ typedef struct Task{
     int id;
     char command[128];
     char status[16];
-    struct Task * next;
-} * Task;
+} Task;
 
-bool reading_allowed;
-int total_nr_tasks;
 Trans sc;
-Task tasks;
 
 // Function to create a transformation
 Trans makeTrans(char s[]){
@@ -54,39 +50,6 @@ Trans addTransformation(Trans t, char s[]){
     new->next = (*ptr);
     (*ptr) = new;
     return t;
-}
-
-// Function to create a task
-Task makeTask(char name[]){
-    Task t = malloc(sizeof(struct Task));
-    strcpy(t->command, name);
-    strcpy(t->status, "n/a");
-    total_nr_tasks ++;
-    t->id = total_nr_tasks;
-    t->next = NULL;
-    return t;
-}
-
-// Function to add tasks
-Task addTask(Task t, char name[]){
-    Trans new = makeTask(name);
-    Trans * ptr = &t;
-    while(*ptr)
-        ptr = & ((*ptr)->next);
-    new->next = (*ptr);
-    (*ptr) = new;
-    return t;
-}
-
-// Function to load a task
-int loadTask(char name[], Task * tk){
-    Task tmp_tk = NULL;
-
-    tmp_tk = addTask(tmp_tk, name);
-    while(* tk)
-        tk = & ((*tk)->next);
-    * tk = tmp_tk;
-    return 1;
 }
 
 // Function to create pipes
@@ -147,9 +110,9 @@ void sigterm_handler(int sig){
 }
 
 // Function to show server status
-void sendStatus(int writer, Trans * tr, Task * t){
+void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     char buff[MAX_BUFF_SIZE]= "";
-    int total_bytes = 0;
+    int i, total_bytes = 0;
 
     while(* tr){
     total_bytes = sprintf(
@@ -164,17 +127,46 @@ void sendStatus(int writer, Trans * tr, Task * t){
     tr = & ((*tr)->next);
     }
 
-    while(* t){
-    total_bytes = sprintf(
-        buff, "[Task] %d: %s\n%s\n",
-        (*t)->id,
-        (*t)->command,
-        (*t)->status);
+    for(i = 0; i < nr_tasks; i++){
+        if(strcmp(tasks[i].status, "concluded")!= 0){
+            total_bytes = sprintf(
+            buff, "[Task #%d] %d: %s\n%s\n",
+            i+1,
+            tasks[i].id,
+            tasks[i].command,
+            tasks[i].status);
+            write(writer, buff, total_bytes);
+            buff[0]= "\0";
+        }
+    }
+}
 
-    write(writer, buff, total_bytes);
-    buff[0]= "\0";
-    
-    t = & ((*t)->next);
+// Realoc memory for tasks if needed
+bool updateTaskSize(Task ** tasks, int newSize){
+    bool res = false;
+    Task * temp = realloc(*tasks, (newSize * sizeof(Task)));
+    if (temp != NULL){
+        * tasks = temp;
+        res = true;
+    }
+    return res;
+}
+
+// Function to create a task
+void addTask(Task * tasks, int total_nr_tasks, int task_id){
+    tasks[total_nr_tasks].id = task_id;
+    strcpy(tasks[total_nr_tasks].command,"TESTE");
+    strcpy(tasks[total_nr_tasks].status,"pending");
+}
+
+// Function to update a tasks' status
+void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
+    int i;
+    for(i = 0; i < total_nr_tasks; i++){
+        if (tasks[i].id == task_id){
+            strcpy(tasks[i].status,status);
+            break;
+        }
     }
 }
 
@@ -187,7 +179,7 @@ int main(int argc, char *argv[]){
     }
 
     sc = NULL;
-    tasks = NULL;
+    Task * tasks = NULL;
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
@@ -204,16 +196,23 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int pid, fifo_reader, fifo_writer, read_bytes, nr_requests;
+    int pid, fifo_reader, fifo_writer, read_bytes, total_nr_tasks, max_nr_tasks;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
-    char * requests[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
     total_nr_tasks = 0;
+    max_nr_tasks = 10;
+    tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         // Check for resources
-        // Insert task info into memory
-        // 
+        if(total_nr_tasks == max_nr_tasks){
+            max_nr_tasks += 5;
+            updateTaskSize(&tasks, max_nr_tasks);
+        }
+        // ADD TASK TEM DE SER MUDADA APÓS A LEITURA DO COMANDO NO PAI
+        addTask(tasks, total_nr_tasks, 1);
+        total_nr_tasks++;
+        
         switch(fork()){
         case -1:
             printMessage(forkError);
@@ -228,13 +227,10 @@ int main(int argc, char *argv[]){
             buffer[read_bytes] = '\0';
 
             if(strcmp(buffer, "status") == 0){
-                sendStatus(fifo_writer, &sc, &tasks);
+                sendStatus(fifo_writer, &sc, tasks, total_nr_tasks);
             }
             else{
-                loadTask("buffer", &tasks);
-                nr_requests = lineSplitter(buffer, requests);
                 sleep(10);
-
                 /*
                 executar transformações
                 -> verificar se há recursos
