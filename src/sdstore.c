@@ -8,6 +8,11 @@ ARGUMENTS:
         * transformationList[]: list of transformations
 */
 
+/* **** COMMANDS **** 
+    ./sdstore status
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste nop
+*/
+
 #include "helper.h"
 
 // Function to check if the desired transformations are valid
@@ -30,16 +35,17 @@ void checkStatus(int reader, int writer){
     write(writer, "status", strlen("status"));
 
     while((read_bytes = read(reader, buffer, MAX_BUFF_SIZE)) > 0 )
-        write(STDOUT_FILENO, buffer ,read_bytes);
+        write(STDOUT_FILENO, buffer, read_bytes);
 }
 
+// ***** MAIN *****
 int main(int argc, char *argv[]){
     if(argc < 2){
         printMessage(argCountError);
         return 0;
     }
 
-    int read_bytes, pid, fifo_writer, fifo_reader;
+    int read_bytes, pid, fifo_writer, fifo_reader, channel;
     char pid_reader[32];
     char pid_writer[32];
     char buffer[MAX_BUFF_SIZE];
@@ -60,13 +66,14 @@ int main(int argc, char *argv[]){
     }
 
     write(channel, &pid, sizeof(pid));
+    close(channel);
 
     fifo_writer = open(pid_writer, O_WRONLY);
     fifo_reader = open(pid_reader, O_RDONLY);
 
     if(argc == 2){
         if(strcmp(argv[1], "status") == 0)
-            checkStatus(fifo_reader,fifo_writer);
+            checkStatus(fifo_reader, fifo_writer);
         else
             printMessage(argError);
         close(fifo_reader);
@@ -92,6 +99,7 @@ int main(int argc, char *argv[]){
     strcpy(buffer, *(argv + 2));
 
     write(fifo_writer, buffer, strlen(buffer));
+    close(fifo_writer);
 
     while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) > 0){
         write(STDOUT_FILENO, buffer, read_bytes);
@@ -100,10 +108,8 @@ int main(int argc, char *argv[]){
     }
 
     close(fifo_reader);
-    close(fifo_writer);
     unlink(pid_reader);
     unlink(pid_writer);
-    close(channel);
 
     return 0;
 }

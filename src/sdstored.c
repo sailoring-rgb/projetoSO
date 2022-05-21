@@ -5,6 +5,10 @@ ARGUMENTS:
         * path_exec: relative path for transformations executables
 */
 
+/* **** COMMANDS **** 
+    ./sdstored ../configs/sdstored.conf ../bin/SDStore-transf/
+*/
+
 #include "helper.h"
 #define path_SDStore "SDStore-transf/"
 #define forkError "[ERROR] Fork unsuccessful.\n"
@@ -26,7 +30,8 @@ typedef struct Task{
     char status[16];
 } Task;
 
-Trans sc;
+// Global variables
+int channel;
 
 // Function to create a transformation
 Trans makeTrans(char s[]){
@@ -154,9 +159,9 @@ bool updateTaskSize(Task ** tasks, int newSize){
 }
 
 // Function to create a task
-void addTask(Task * tasks, int total_nr_tasks, int task_id){
+void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
     tasks[total_nr_tasks].id = task_id;
-    strcpy(tasks[total_nr_tasks].command,"TESTE");
+    strcpy(tasks[total_nr_tasks].command,command);
     strcpy(tasks[total_nr_tasks].status,"pending");
 }
 
@@ -171,7 +176,7 @@ void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
     }
 }
 
-
+// ***** MAIN *****
 int main(int argc, char *argv[]){
     // Checking for argc
     if(argc < 3 || argc > 3){
@@ -179,7 +184,7 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    sc = NULL;
+    Trans sc = NULL;
     Task * tasks = NULL;
 
     // Loading server configuration
@@ -197,22 +202,18 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int pid, fifo_reader, fifo_writer, read_bytes, total_nr_tasks, max_nr_tasks;
+    int pid, fifo_reader, fifo_writer, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
-    total_nr_tasks = 0;
-    max_nr_tasks = 10;
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
-        // Check for resources
         if(total_nr_tasks == max_nr_tasks){
             max_nr_tasks += 5;
             updateTaskSize(&tasks, max_nr_tasks);
         }
-        // ADD TASK TEM DE SER MUDADA APÓS A LEITURA DO COMANDO NO PAI
-        addTask(tasks, total_nr_tasks, pid);
-        total_nr_tasks++;
+        // WHEN TASK INITIATING A TASK PERFORM THESE TWO LINES
+        //updateTask(tasks, total_nr_tasks, pid, "concluded");
         
         switch(fork()){
         case -1:
@@ -220,14 +221,17 @@ int main(int argc, char *argv[]){
             return false;
         case 0:
             //[SON]
-            sprintf(pid_reading,"../tmp/%d_reader",pid);
-            sprintf(pid_writing,"../tmp/%d_writer",pid);
+            sprintf(pid_writing, "../tmp/%d_writer", pid);
+            sprintf(pid_reading, "../tmp/%d_reader", pid);
             fifo_reader = open(pid_writing, O_RDONLY);
             fifo_writer = open(pid_reading, O_WRONLY);
-            read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
+            read(fifo_reader, &buffer, MAX_BUFF_SIZE);
             buffer[read_bytes] = '\0';
-
+            // addTask(tasks, total_nr_tasks, pid, buffer);
+            // total_nr_tasks++;
+        
             if(strcmp(buffer, "status") == 0){
+                printMessage("SON\n");
                 sendStatus(fifo_writer, &sc, tasks, total_nr_tasks);
             }
             else{
@@ -242,6 +246,7 @@ int main(int argc, char *argv[]){
             close(fifo_reader);
             close(fifo_writer);
             _exit(0);
+           
         }
     }
 

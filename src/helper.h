@@ -19,7 +19,6 @@
 
 // Global variables
 char fifo[] = "../tmp/fifo";
-int channel;
 
 // Function for printing errors
 void printMessage(char msg[]){
