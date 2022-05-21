@@ -327,34 +327,34 @@ int main(int argc, char *argv[]){
                     executing_tasks[total_executing] = pid;
                     total_executing++;
                     updateResources(&sc, transformationsList, num_transformations, "increase");
+                    switch(fork()){
+                        case -1:
+                            printMessage(forkError);
+                            return false;
+                        case 0:
+                            //[SON]
+                            sleep(10);
+                            /*
+                            executar transformações
+                            */
+                            _exit(pid);
+                        default:
+                            buffer[0] = '\0';
+                            tmp[0] = '\0';
+                            // wait(&pid);
+                            // updateResources(&sc, transformationsList, num_transformations, "decrease");
+                            // updateTask(tasks, total_nr_tasks, pid, "concluded");
+                            close(fifo_reader);
+                            close(fifo_writer);
+                    }
                 }
                 /*
                 Notes:
-                -> Selecionar um pid e colocar o pedido em execução
-                    - Libertar recursos quando estiver despachado o pedido
+                -> Selecionar um pid 
+                    - Fork e executar o pedido
+                    - Libertar recursos no fim
+                -> Criar uma lista de pedidos em execução, pendentes, wtv
                 */
-                switch(fork()){
-                    case -1:
-                        printMessage(forkError);
-                        return false;
-                    case 0:
-                        //[SON]
-                        sleep(10);
-                        /*
-                        executar transformações
-                        */
-                        _exit(pid);
-                    default:
-                        buffer[0] = '\0';
-                        tmp[0] = '\0';
-                        // PRECISA DE UM WAIT PARA DEPOIS DESCOMENTAR ISTO!
-                        // if(!type_status){
-                        //     updateResources(&sc, transformationsList, num_transformations, "decrease");
-                        //     updateTask(tasks, total_nr_tasks, pid, "concluded");
-                        // }
-                        close(fifo_reader);
-                        close(fifo_writer);
-                }
             }
             else{
                 write(fifo_writer, inputError, strlen(inputError));
