@@ -135,7 +135,7 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     buff[0]= '\0';
 
     for(i = 0; i < nr_tasks; i++){
-        if(strcmp(tasks[i].status, "concluded")!= 0){
+        if(tasks[i].id != -1){
             counter++;
             total_bytes = sprintf(
             buff, "[Task #%d] %d: %s\n%s\n",
@@ -151,9 +151,9 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
 }
 
 // Realoc memory for tasks if needed
-bool updateTaskSize(Task ** tasks, int newSize){
+bool updateTaskSize(Task ** tasks, int new_size){
     bool res = false;
-    Task * temp = realloc(*tasks, (newSize * sizeof(Task)));
+    Task * temp = realloc(*tasks, (new_size * sizeof(Task)));
     if (temp != NULL){
         * tasks = temp;
         res = true;
@@ -170,12 +170,37 @@ void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
 
 // Function to update a tasks' status
 void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
-    for(int i = 0; i < total_nr_tasks; i++){
-        if (tasks[i].id == task_id){
-            strcpy(tasks[i].status,status);
+    if(strcmp(status, "concluded") == 0){
+        for(int i = 0; i < total_nr_tasks; i++){
+            if (tasks[i].id == task_id){
+                tasks[i].id = -1;
+                strcpy(tasks[i].command,"");
+                strcpy(tasks[i].status,"");
+                break;
+            }
+        }
+    }
+    else{
+        for(int i = 0; i < total_nr_tasks; i++){
+            if (tasks[i].id == task_id){
+                strcpy(tasks[i].status,status);
+                break;
+            }
+        }
+    }
+}
+
+// Function to check if some information is not needed
+
+int checkForSpot(Task * tasks, int max_nr_tasks){
+    int res = -1;
+    for(int i = 0; i < max_nr_tasks; i++){
+        if (tasks[i].id == -1){
+            res = i;
             break;
         }
     }
+    return res;
 }
 
 // ***** MAIN *****
@@ -204,15 +229,18 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int pid, fifo_reader, fifo_writer, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
+    int pid, fifo_reader, fifo_writer, freeSpot = -1, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         if(total_nr_tasks == max_nr_tasks){
-            max_nr_tasks += 5;
-            updateTaskSize(&tasks, max_nr_tasks);
+            freeSpot = checkForSpot(tasks, max_nr_tasks);
+            if(freeSpot == -1){
+                max_nr_tasks += 5;
+                updateTaskSize(&tasks, max_nr_tasks);
+            }
         }
         
         sprintf(pid_writing, "../tmp/%d_writer", pid);
@@ -224,7 +252,10 @@ int main(int argc, char *argv[]){
         buffer[read_bytes] = '\0';
         
         if(strcmp(buffer, "status")!= 0){
-            addTask(tasks, total_nr_tasks, pid, buffer);
+            if(freeSpot == -1)
+                addTask(tasks, total_nr_tasks, pid, buffer);
+            else
+                addTask(tasks, freeSpot, pid, buffer);
             total_nr_tasks++;
         }
 
