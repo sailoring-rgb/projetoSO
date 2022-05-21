@@ -65,10 +65,10 @@ int main(int argc, char *argv[]){
     fifo_reader = open(pid_reader, O_RDONLY);
 
     if(argc == 2){
-        if(strcmp(argv[1], "status") == 0){
+        if(strcmp(argv[1], "status") == 0)
             checkStatus(fifo_reader,fifo_writer);
-            }
-        else printMessage(argError);
+        else
+            printMessage(argError);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
@@ -76,17 +76,11 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    if(argc < 5){
-        printMessage(argError);
-        close(fifo_reader);
-        close(fifo_writer);
-        unlink(pid_reader);
-        unlink(pid_writer);
-        return 0;
-    }
-
-    if(strcmp(argv[1], "proc-file") != 0 || validateRequest(argc, argv)){
-        printMessage(requestError);
+    if(argc < 5 || strcmp(argv[1], "proc-file") != 0 || !validateRequest(argc, argv)){
+        if (argc < 5)
+            printMessage(argError);
+        else
+            printMessage(requestError);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);

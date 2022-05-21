@@ -211,6 +211,9 @@ int main(int argc, char *argv[]){
     total_nr_tasks = 0;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
+        // Check for resources
+        // Insert task info into memory
+        // 
         switch(fork()){
         case -1:
             printMessage(forkError);
@@ -228,8 +231,9 @@ int main(int argc, char *argv[]){
                 sendStatus(fifo_writer, &sc, &tasks);
             }
             else{
-                //loadTask("buffer", &tasks);
+                loadTask("buffer", &tasks);
                 nr_requests = lineSplitter(buffer, requests);
+                sleep(10);
 
                 /*
                 executar transformações

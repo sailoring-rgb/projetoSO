@@ -13,7 +13,7 @@
 #define argError "[ERROR] Invalid arguments.\n"
 #define serverError "[ERROR] Server not running.\n"
 #define fifoError "[ERROR] Can't create fifo.\n"
-#define requestError "Invalid request.\n"
+#define requestError "[ERROR] Invalid request.\n"
 
 #define MAX_BUFF_SIZE 1024
 
