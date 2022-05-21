@@ -112,7 +112,7 @@ void sigterm_handler(int sig){
 // Function to show server status
 void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     char buff[MAX_BUFF_SIZE]= "";
-    int i, total_bytes = 0;
+    int i, counter = 0, total_bytes = 0;
 
     while(* tr){
     total_bytes = sprintf(
@@ -122,21 +122,22 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
         (*tr)->max_operation_allowed);
 
     write(writer, buff, total_bytes);
-    buff[0]= "\0";
+    buff[0]= '\0';
 
     tr = & ((*tr)->next);
     }
 
     for(i = 0; i < nr_tasks; i++){
         if(strcmp(tasks[i].status, "concluded")!= 0){
+            counter++;
             total_bytes = sprintf(
             buff, "[Task #%d] %d: %s\n%s\n",
-            i+1,
+            counter,
             tasks[i].id,
             tasks[i].command,
             tasks[i].status);
             write(writer, buff, total_bytes);
-            buff[0]= "\0";
+            buff[0]= '\0';
         }
     }
 }
@@ -210,7 +211,7 @@ int main(int argc, char *argv[]){
             updateTaskSize(&tasks, max_nr_tasks);
         }
         // ADD TASK TEM DE SER MUDADA APÓS A LEITURA DO COMANDO NO PAI
-        addTask(tasks, total_nr_tasks, 1);
+        addTask(tasks, total_nr_tasks, pid);
         total_nr_tasks++;
         
         switch(fork()){
