@@ -16,6 +16,10 @@ ARGUMENTS:
 #define path_SDStore "SDStore-transf/"
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
+#define inputError "[ERROR] Desired transformations cannot be performed due to server configuration.\n"
+#define pendingStatus "Pending.\n"
+#define concludedStatus "Concluded.\n"
+#define executingStatus "Executing.\n"
 
 // **************** STRUCTS ****************
 // Transformation information
@@ -95,16 +99,38 @@ int loadServer(char * path[], Trans * tr){
     return 1;
 }
 
-// Function for cheking if resources are free
-bool checkResources(Trans * tr, char * name, int nrTrans){
-    while(* tr && (strcmp((*tr)->operation_name, name) != 0))
+// Function for validating requet
+bool validateInput(Trans * tr, char * transformations[], int nrTrans){
+    int resources_needed;
+    int space_available = true;
+    while(* tr  && space_available){
+        resources_needed = 0;
+        for(int i = 2; i < nrTrans && space_available; i++){
+            if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                resources_needed++;
+        }
+        if((*tr)->max_operation_allowed < resources_needed)
+            space_available = false;
         tr = & ((*tr)->next);
-    
-    if(* tr)
-        if (((*tr)->currently_running + nrTrans) < (*tr)->max_operation_allowed)
-            return true;
+    }
+    return space_available;
+}
 
-    return false;
+// Function for cheking if resources are free
+bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTrans){
+    int resources_needed;
+    bool space_available = true;
+    while(* tr  && space_available){
+        resources_needed = 0;
+        for(int i = 2; i < nrTrans && space_available; i++){
+            if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                resources_needed++;
+        }
+        if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed))
+            space_available = false;
+        tr = & ((*tr)->next);
+    }
+    return space_available;
 }
 
 // Routine for handling sigterm
@@ -148,7 +174,7 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     }
 }
 
-// Realoc memory for tasks if needed
+// Function to realoc memory for tasks
 bool updateTaskSize(Task ** tasks, int new_size){
     bool res = false;
     Task * temp = realloc(*tasks, (new_size * sizeof(Task)));
@@ -200,6 +226,29 @@ int checkForSpot(Task * tasks, int max_nr_tasks){
     return res;
 }
 
+// Function to update running resources
+void updateResources(Trans * tr, char * transformations[], int nrTrans, char mode[]){
+    if(strcmp(mode, "increase") == 0){
+        while(* tr){
+            for(int i = 2; i < nrTrans; i++){
+                if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                    (*tr)->currently_running++;
+                }
+            tr = & ((*tr)->next);
+
+        }
+    }
+    else{
+        while(* tr){
+            for(int i = 2; i < nrTrans; i++){
+                if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                    (*tr)->currently_running--;
+                }
+        tr = & ((*tr)->next);
+        }
+    }
+}
+
 // **************** MAIN ****************
 int main(int argc, char *argv[]){
     // Checking for argc
@@ -226,10 +275,17 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    int pid, fifo_reader, fifo_writer, freeSpot = -1, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
-    char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE];
+    int pid, fifo_reader, fifo_writer, num_transformations;
+    int freeSpot = -1, read_bytes = 0, total_pending = 0, total_executing = 0, total_nr_tasks = 0, max_nr_tasks = 10;
+    char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
+    char * transformationsList[MAX_BUFF_SIZE];
+    int pending_tasks[10], executing_tasks[10];
+    
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
+
+    for(int i = 0; i < max_nr_tasks; i++)
+        tasks[i].id = -1;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         if(total_nr_tasks == max_nr_tasks){
@@ -249,42 +305,78 @@ int main(int argc, char *argv[]){
         buffer[read_bytes] = '\0';
         
         if(strcmp(buffer, "status")!= 0){
-            if(freeSpot == -1)
-                addTask(tasks, total_nr_tasks, pid, buffer);
-            else
-                addTask(tasks, freeSpot, pid, buffer);
-            total_nr_tasks++;
-        }
-
-        /*
-            Verificar existência de recursos aqui;
-            Se não estiverem disponíveis, adicionar uma lista (com o PID do processo) para ser executado depois
-            Arranjar forma de dar trigger para ser executado
-            Quando passar a execução, informar cliente
-        */
-        
-        switch(fork()){
-            case -1:
-                printMessage(forkError);
-                return false;
-            case 0:
-                //[SON]
-                if(strcmp(buffer, "status") == 0){
-                    sendStatus(fifo_writer, &sc, tasks, total_nr_tasks);
+            strcpy(tmp,buffer);
+            num_transformations = lineSplitter(buffer, transformationsList);
+            if(validateInput(&sc,transformationsList,num_transformations)){
+                if(freeSpot == -1)
+                    addTask(tasks, total_nr_tasks, pid, tmp);
+                else{
+                    addTask(tasks, freeSpot, pid, tmp);
+                    freeSpot = -1;
+                }
+                total_nr_tasks++;
+                if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
+                    write(fifo_writer, pendingStatus, strlen(pendingStatus));
+                    updateTask(tasks, total_nr_tasks, pid, "pending");
+                    pending_tasks[total_pending] = pid;
+                    total_pending++;
                 }
                 else{
-                    sleep(10);
-                    /*
-                    executar transformações
-                    */
+                    write(fifo_writer, executingStatus, strlen(executingStatus));
+                    updateTask(tasks, total_nr_tasks, pid, "executing");
+                    executing_tasks[total_executing] = pid;
+                    total_executing++;
+                    updateResources(&sc, transformationsList, num_transformations, "increase");
                 }
-                _exit(pid);
-            default:
-                buffer[0] = '\0';
-                //updateTask(tasks, total_nr_tasks, pid, "concluded");
-                //total_nr_tasks--;
+                /*
+                Notes:
+                -> Selecionar um pid e colocar o pedido em execução
+                    - Libertar recursos quando estiver despachado o pedido
+                */
+                switch(fork()){
+                    case -1:
+                        printMessage(forkError);
+                        return false;
+                    case 0:
+                        //[SON]
+                        sleep(10);
+                        /*
+                        executar transformações
+                        */
+                        _exit(pid);
+                    default:
+                        buffer[0] = '\0';
+                        tmp[0] = '\0';
+                        // PRECISA DE UM WAIT PARA DEPOIS DESCOMENTAR ISTO!
+                        // if(!type_status){
+                        //     updateResources(&sc, transformationsList, num_transformations, "decrease");
+                        //     updateTask(tasks, total_nr_tasks, pid, "concluded");
+                        // }
+                        close(fifo_reader);
+                        close(fifo_writer);
+                }
+            }
+            else{
+                write(fifo_writer, inputError, strlen(inputError));
                 close(fifo_reader);
                 close(fifo_writer);
+            } 
+        }
+        else{
+            switch(fork()){
+                case -1:
+                    printMessage(forkError);
+                    return false;
+                case 0:
+                    //[SON]
+                    sendStatus(fifo_writer, &sc, tasks, max_nr_tasks);
+                    _exit(pid);
+                default:
+                    wait(&pid);
+                    buffer[0] = '\0';                
+                    close(fifo_reader);
+                    close(fifo_writer);
+            }
         }
     }
 
