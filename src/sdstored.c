@@ -132,6 +132,8 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     tr = & ((*tr)->next);
     }
 
+    buff[0]= '\0';
+
     for(i = 0; i < nr_tasks; i++){
         if(strcmp(tasks[i].status, "concluded")!= 0){
             counter++;
@@ -141,6 +143,7 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
             tasks[i].id,
             tasks[i].command,
             tasks[i].status);
+
             write(writer, buff, total_bytes);
             buff[0]= '\0';
         }
@@ -167,8 +170,7 @@ void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
 
 // Function to update a tasks' status
 void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
-    int i;
-    for(i = 0; i < total_nr_tasks; i++){
+    for(int i = 0; i < total_nr_tasks; i++){
         if (tasks[i].id == task_id){
             strcpy(tasks[i].status,status);
             break;
@@ -212,40 +214,44 @@ int main(int argc, char *argv[]){
             max_nr_tasks += 5;
             updateTaskSize(&tasks, max_nr_tasks);
         }
-        // WHEN TASK INITIATING A TASK PERFORM THESE TWO LINES
-        //updateTask(tasks, total_nr_tasks, pid, "concluded");
+        
+        sprintf(pid_writing, "../tmp/%d_writer", pid);
+        sprintf(pid_reading, "../tmp/%d_reader", pid);
+
+        fifo_reader = open(pid_writing, O_RDONLY);
+        fifo_writer = open(pid_reading, O_WRONLY);
+        read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
+        buffer[read_bytes] = '\0';
+        
+        if(strcmp(buffer, "status")!= 0){
+            addTask(tasks, total_nr_tasks, pid, buffer);
+            total_nr_tasks++;
+        }
         
         switch(fork()){
-        case -1:
-            printMessage(forkError);
-            return false;
-        case 0:
-            //[SON]
-            sprintf(pid_writing, "../tmp/%d_writer", pid);
-            sprintf(pid_reading, "../tmp/%d_reader", pid);
-            fifo_reader = open(pid_writing, O_RDONLY);
-            fifo_writer = open(pid_reading, O_WRONLY);
-            read(fifo_reader, &buffer, MAX_BUFF_SIZE);
-            buffer[read_bytes] = '\0';
-            // addTask(tasks, total_nr_tasks, pid, buffer);
-            // total_nr_tasks++;
-        
-            if(strcmp(buffer, "status") == 0){
-                printMessage("SON\n");
-                sendStatus(fifo_writer, &sc, tasks, total_nr_tasks);
-            }
-            else{
-                sleep(10);
-                /*
-                executar transformações
-                -> verificar se há recursos
-                    * se não houver: escrever "pending" para o fifo
-                    * quando houver avisar que está a ser executado
-                */
-            }
-            close(fifo_reader);
-            close(fifo_writer);
-            _exit(0);
+            case -1:
+                printMessage(forkError);
+                return false;
+            case 0:
+                //[SON]
+                if(strcmp(buffer, "status") == 0){
+                    sendStatus(fifo_writer, &sc, tasks, total_nr_tasks);
+                }
+                else{
+                    sleep(10);
+                    /*
+                    executar transformações
+                    -> verificar se há recursos
+                        * se não houver: escrever "pending" para o fifo
+                        * quando houver avisar que está a ser executado
+                    */
+                }
+                _exit(pid);
+            default:
+                buffer[0] = '\0';
+                //updateTask(tasks, total_nr_tasks, pid, "concluded");
+                close(fifo_reader);
+                close(fifo_writer);
            
         }
     }

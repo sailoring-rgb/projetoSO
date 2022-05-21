@@ -96,18 +96,24 @@ int main(int argc, char *argv[]){
     }
 
     // Passing information into buffer
-    strcpy(buffer, *(argv + 2));
+    buffer[0] = '\0';
+    for(int i = 1; i < argc; i++){
+        strcat(buffer, argv[i]);
+        if(i != argc -1)
+            strcat(buffer, " ");
+    }
 
     write(fifo_writer, buffer, strlen(buffer));
-    close(fifo_writer);
 
     while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) > 0){
+        buffer[read_bytes] = '\0';
         write(STDOUT_FILENO, buffer, read_bytes);
         fflush(stdout);
         buffer[0] = '\0';
     }
 
     close(fifo_reader);
+    close(fifo_writer);
     unlink(pid_reader);
     unlink(pid_writer);
 
