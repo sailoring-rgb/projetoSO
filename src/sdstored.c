@@ -17,6 +17,7 @@ ARGUMENTS:
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 #define inputError "[ERROR] Desired transformations cannot be performed due to server configuration.\n"
+#define fileError "[ERROR] Couldn't find source file.\n"
 #define pendingStatus "Pending.\n"
 #define concludedStatus "Concluded.\n"
 #define executingStatus "Executing.\n"
@@ -260,18 +261,76 @@ bool removeElement(int arr[], int pos, int nr_elems){
     return false;
 }
 
-void executeTaks(){
+Trans getTrans(Trans transf, char name[])
+{
+    while(transf && strcmp(transf->operation_name, name)!=0)
+        transf = transf->next;
+    return transf;
+}
+
+int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
     int pid, status;
+    int input = open(transformationsList[2],O_RDONLY, 0777);
+    int output = open(transformationsList[3], O_RDWR | O_CREAT ,0777);
+
+    if(input  < 0 || output < 0)
+        return 0;
+    
+    int fildes[num_transformations-4][2];
+
     switch(pid = fork()){
         case -1:
+            wait(NULL);
             printMessage(forkError);
+            close(input);
+            close(output);
         case 0:
-            sleep(10);
-            exit(status);
+            if(num_transformations == 5){
+                Trans *t = getTrans(&transf,transformationsList[4]);
+                dup2(input,0);
+                dup2(output,1);
+                execl((*t)->operation_name,(*t)->operation_name,NULL);
+            } else {
+                makePipes(fildes,num_transformations-4);
+
+                for(int i = 4; i < num_transformations; i++){
+                    Trans *t = getTrans(&transf,transformationsList[i]);
+                    if((pid = fork()) == 0){
+
+                        if(i == num_transformations-1){
+                            dup2(input,0);
+                            dup2(fildes[i-5][1],1);
+                            closePipes(fildes, num_transformations-4);
+                            execl((*t)->operation_name, (*t)->operation_name, NULL);
+                        }
+                    }
+                    else
+                        if(i == 4) {
+                            dup2(output,1);
+                            dup2(fildes[i-4][0],0);
+                            closePipes(fildes,num_transformations-4);
+                            execl((*t)->operation_name, (*t)->operation_name, NULL);
+                        }
+                        else
+                            if(i != num_transformations-1){
+                                dup2(fildes[i-4][0],0);
+                                dup2(fildes[i-5][1],1);
+                                closePipes(fildes,num_transformations-4);
+                                execl((*t)->operation_name, (*t)->operation_name, NULL);
+                            }
+                        else{
+                            closePipes(fildes, num_transformations-1);
+                            _exit(0);
+                        }
+                }
+            }
+            // sleep(10);
+            // exit(status);
         default:
           // waitpid(pid, &status, 0);
           ;
         }
+    return 1;
 }
 
 // Function to check if a pending task can be done
@@ -300,7 +359,8 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
         write(pendingFifoList[i], executingStatus, strlen(executingStatus));
         updateTask(tasks, nr_tasks, pid, "executing");
         updateResources(&sc, transformationsList, num_transformations, "increase");
-        executeTaks();
+        if (executeTaks(&sc,transformationsList,num_transformations) == 0)
+            printMessage(fileError);
         close(pendingFifoList[ret]);
         removeElement(pendingFifoList, ret, nr_pending);
         //updateTask(tasks, nr_tasks, pid, "concluded");
@@ -393,8 +453,8 @@ int main(int argc, char *argv[]){
                     executing_tasks[total_executing] = pid;
                     executing_fifos[total_executing] = fifo_writer;
                     total_executing++;
-                    executeTaks();
-
+                    if (executeTaks(&sc,transformationsList,num_transformations) == 0)
+                        write(fifo_reader, fileError, strlen(fileError));
                     close(fifo_reader);
                     close(fifo_writer);
                     //updateTask(tasks, total_nr_tasks, pid, "concluded");
