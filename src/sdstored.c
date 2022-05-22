@@ -249,6 +249,66 @@ void updateResources(Trans * tr, char * transformations[], int nrTrans, char mod
     }
 }
 
+// Function to remove an elemnt from an array
+bool removeElement(int arr[], int pos, int nr_elems){
+    if (pos >= nr_elems + 1){
+        for (int i = pos - 1; i < nr_elems -1; i++){  
+                arr[i] = arr[i+1];  
+            }
+        return true;
+    }
+    return false;
+}
+
+void executeTaks(){
+    switch(fork()){
+        case -1:
+            printMessage(forkError);
+        case 0:
+            sleep(10);
+        default:
+           ;
+        }
+}
+
+// Function to check if a pending task can be done
+int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Trans * sc, Task * tasks, int nr_tasks){
+    char * transformationsList[MAX_BUFF_SIZE], buffer[MAX_BUFF_SIZE];
+    int num_transformations, i, j, pid;
+    int ret = -1; 
+    
+    for(i = 0; i < nr_pending; i++){
+        pid = pendingList[i];
+        j = 0;
+        while(tasks[j].id != pid && j < nr_tasks)
+            j++;
+        if (j < nr_tasks){
+            strcpy(buffer, tasks[j].command);
+            num_transformations = lineSplitter(buffer, transformationsList);
+            if (evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
+                ret = i;
+                break;
+            }
+        }
+    }
+
+    if(ret != -1){
+        removeElement(pendingList, ret, nr_pending);
+        write(pendingFifoList[i], executingStatus, strlen(executingStatus));
+        updateTask(tasks, nr_tasks, pid, "executing");
+        updateResources(&sc, transformationsList, num_transformations, "increase");
+        executeTaks();
+        close(pendingFifoList[ret]);
+        removeElement(pendingFifoList, ret, nr_pending);
+        updateTask(tasks, nr_tasks, pid, "concluded");
+        updateResources(&sc, transformationsList, num_transformations, "decrease");
+    }
+
+    return ret;
+}
+
+
+
 // **************** MAIN ****************
 int main(int argc, char *argv[]){
     // Checking for argc
@@ -276,10 +336,10 @@ int main(int argc, char *argv[]){
     }
 
     int pid, fifo_reader, fifo_writer, num_transformations;
-    int freeSpot = -1, read_bytes = 0, total_pending = 0, total_executing = 0, total_nr_tasks = 0, max_nr_tasks = 10;
+    int freeSpot = -1, read_bytes = 0, total_pending = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MAX_BUFF_SIZE];
-    int pending_tasks[10], executing_tasks[10];
+    int pending_tasks[10], pending_fifos[10];
     
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
@@ -319,42 +379,41 @@ int main(int argc, char *argv[]){
                     write(fifo_writer, pendingStatus, strlen(pendingStatus));
                     updateTask(tasks, total_nr_tasks, pid, "pending");
                     pending_tasks[total_pending] = pid;
+                    pending_fifos[total_nr_tasks] = fifo_writer;
                     total_pending++;
+                    close(fifo_reader);
                 }
                 else{
                     write(fifo_writer, executingStatus, strlen(executingStatus));
                     updateTask(tasks, total_nr_tasks, pid, "executing");
-                    executing_tasks[total_executing] = pid;
-                    total_executing++;
                     updateResources(&sc, transformationsList, num_transformations, "increase");
-                    switch(fork()){
-                        case -1:
-                            printMessage(forkError);
-                            return false;
-                        case 0:
-                            //[SON]
-                            sleep(10);
-                            /*
-                            executar transformações
-                            */
-                            _exit(pid);
-                        default:
-                            buffer[0] = '\0';
-                            tmp[0] = '\0';
-                            // wait(&pid);
-                            // updateResources(&sc, transformationsList, num_transformations, "decrease");
-                            // updateTask(tasks, total_nr_tasks, pid, "concluded");
-                            close(fifo_reader);
-                            close(fifo_writer);
-                    }
+                    executeTaks();
+                    close(fifo_reader);
+                    close(fifo_writer);
+                    updateTask(tasks, total_nr_tasks, pid, "concluded");
+                    updateResources(&sc, transformationsList, num_transformations, "decrease");
+                    
+                    // switch(fork()){
+                    //     case -1:
+                    //         printMessage(forkError);
+                    //         return false;
+                    //     case 0:
+                    //         //[SON]
+                    //         sleep(10);
+                    //         /*
+                    //         executar transformações
+                    //         */
+                    //         _exit(pid);
+                    //     default:
+                    //         buffer[0] = '\0';
+                    //         tmp[0] = '\0';
+                    //         wait(NULL);
+                    //         //updateResources(&sc, transformationsList, num_transformations, "decrease");
+                    //         //updateTask(tasks, total_nr_tasks, pid, "concluded");
+                    //         close(fifo_reader);
+                    //         close(fifo_writer);
+                    // }
                 }
-                /*
-                Notes:
-                -> Selecionar um pid 
-                    - Fork e executar o pedido
-                    - Libertar recursos no fim
-                -> Criar uma lista de pedidos em execução, pendentes, wtv
-                */
             }
             else{
                 write(fifo_writer, inputError, strlen(inputError));
@@ -368,15 +427,17 @@ int main(int argc, char *argv[]){
                     printMessage(forkError);
                     return false;
                 case 0:
-                    //[SON]
                     sendStatus(fifo_writer, &sc, tasks, max_nr_tasks);
                     _exit(pid);
                 default:
-                    wait(&pid);
                     buffer[0] = '\0';                
                     close(fifo_reader);
                     close(fifo_writer);
             }
+        }
+        // this doesn't seem to work :(
+        if (executePending(pending_tasks, pending_fifos, total_pending, &sc, tasks, total_nr_tasks) != -1){
+               total_pending--;
         }
     }
 
