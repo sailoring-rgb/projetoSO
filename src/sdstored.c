@@ -261,13 +261,16 @@ bool removeElement(int arr[], int pos, int nr_elems){
 }
 
 void executeTaks(){
-    switch(fork()){
+    int pid, status;
+    switch(pid = fork()){
         case -1:
             printMessage(forkError);
         case 0:
             sleep(10);
+            exit(status);
         default:
-           ;
+          // waitpid(pid, &status, 0);
+          ;
         }
 }
 
@@ -300,8 +303,8 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
         executeTaks();
         close(pendingFifoList[ret]);
         removeElement(pendingFifoList, ret, nr_pending);
-        updateTask(tasks, nr_tasks, pid, "concluded");
-        updateResources(&sc, transformationsList, num_transformations, "decrease");
+        //updateTask(tasks, nr_tasks, pid, "concluded");
+        //updateResources(&sc, transformationsList, num_transformations, "decrease");
     }
 
     return ret;
@@ -336,10 +339,10 @@ int main(int argc, char *argv[]){
     }
 
     int pid, fifo_reader, fifo_writer, num_transformations;
-    int freeSpot = -1, read_bytes = 0, total_pending = 0, total_nr_tasks = 0, max_nr_tasks = 10;
+    int freeSpot = -1, read_bytes = 0, total_executing = 0, total_pending = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MAX_BUFF_SIZE];
-    int pending_tasks[10], pending_fifos[10];
+    int pending_tasks[10], pending_fifos[10], executing_tasks[10], executing_fifos[10];
     
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
@@ -387,11 +390,15 @@ int main(int argc, char *argv[]){
                     write(fifo_writer, executingStatus, strlen(executingStatus));
                     updateTask(tasks, total_nr_tasks, pid, "executing");
                     updateResources(&sc, transformationsList, num_transformations, "increase");
+                    executing_tasks[total_executing] = pid;
+                    executing_fifos[total_executing] = fifo_writer;
+                    total_executing++;
                     executeTaks();
+
                     close(fifo_reader);
                     close(fifo_writer);
-                    updateTask(tasks, total_nr_tasks, pid, "concluded");
-                    updateResources(&sc, transformationsList, num_transformations, "decrease");
+                    //updateTask(tasks, total_nr_tasks, pid, "concluded");
+                    //updateResources(&sc, transformationsList, num_transformations, "decrease");
                     
                     // switch(fork()){
                     //     case -1:
