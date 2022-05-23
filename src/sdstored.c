@@ -188,14 +188,15 @@ bool updateTaskSize(Task ** tasks, int new_size){
 }
 
 // Function to create a task
-void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
+void addTask(Task * tasks, int total_nr_tasks, int task_id, int exec_id, char command[]){
     tasks[total_nr_tasks].pid_request = task_id;
+    tasks[total_nr_tasks].pid_executing = exec_id;
     strcpy(tasks[total_nr_tasks].command,command);
     strcpy(tasks[total_nr_tasks].status,"pending");
 }
 
 // Function to update a tasks' status
-void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
+void updateTask(Task * tasks, int total_nr_tasks, int task_id, int exec_id, char status[]){
     if(strcmp(status, "concluded") == 0){
         for(int i = 0; i < total_nr_tasks; i++){
             if (tasks[i].pid_request == task_id){
@@ -209,6 +210,7 @@ void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
     else{
         for(int i = 0; i < total_nr_tasks; i++){
             if (tasks[i].pid_request == task_id){
+                tasks[i].pid_executing = exec_id;
                 strcpy(tasks[i].status,status);
                 break;
             }
@@ -355,13 +357,13 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
     if(ret != -1){
         removeElement(pendingList, ret, nr_pending);
         write(pendingFifoList[i], executingStatus, strlen(executingStatus));
-        updateTask(tasks, nr_tasks, pid, "executing");
+        updateTask(tasks, nr_tasks, pid, -1, "executing");
         updateResources(&sc, transformationsList, num_transformations, "increase");
         if (executeTaks(&sc,transformationsList,num_transformations) == 0)
             printMessage(fileError);
         close(pendingFifoList[ret]);
         removeElement(pendingFifoList, ret, nr_pending);
-        updateTask(tasks, nr_tasks, pid, "concluded");
+        updateTask(tasks, nr_tasks, pid, -1, "concluded");
         updateResources(&sc, transformationsList, num_transformations, "decrease");
     }
 
@@ -370,21 +372,40 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
 
 // ********* FOR TESTING
 bool son_finished = true;
-int size = 10;
-int pending_tasks[10], executing_tasks[10], finished_tasks[10] ;
+#define ARR_SIZE 20
+
+int pending_tasks[ARR_SIZE], executing_tasks[ARR_SIZE], finished_tasks[ARR_SIZE];
 int total_executing = 0, total_pending = 0, total_finished = 0;
 
-void sigchild_handler(int signum){
-    
+// Função para atualizar as listas de PIDs
+void updateLists(pid_t pid, int status){
+    int i = 0;
+    if(WIFEXITED(status)){
+        while((executing_tasks[i] != pid) && (i < ARR_SIZE))
+            i++;
+        if (i < ARR_SIZE){
+            removeElement(executing_tasks, i, ARR_SIZE);
+            total_executing--;
+        }
+        i = 0;
+        while((finished_tasks[i] != -1) && (i < ARR_SIZE))
+            i++;
+        if (i < ARR_SIZE){
+            finished_tasks[i] = pid;
+            total_finished++;
+        }
+    }
 }
 
+
+// Handler para sinal SIGCHLD
 void sigchild_handler(int signum){
     pid_t pid;
     int status;
     son_finished = true;
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0){
-        //unregister_child(pid, status);  
-        // Function to update global variables
+        updateLists(pid,status);
+        //unregister_child(pid, status);
     }
 }
 
@@ -394,11 +415,11 @@ int dummyExecute(){
     case -1:
         printMessage(forkError);
     case 0:
-        sleep(10);
-        exit(pid);
-    default:
-        return pid;
+        printMessage("A EXECUTAR\n");
+        sleep(4);
+        _exit(pid);
     }
+    return pid;
 }
 
 // **************** MAIN ****************
@@ -426,16 +447,24 @@ int main(int argc, char *argv[]){
         printMessage(fifoError);
         return 0;
     }
+
     pid_t pid;
-    int fifo_reader, fifo_writer, num_transformations;
+    int fifo_reader, fifo_writer, num_transformations, i, executing_pid;
     int freeSpot = -1, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MAX_BUFF_SIZE];
+    
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
-    for(int i = 0; i < max_nr_tasks; i++)
+    for(i = 0; i < max_nr_tasks; i++)
         tasks[i].pid_request = -1;
+
+    for(i = 0; i < ARR_SIZE; i++){
+        pending_tasks[i] = -1;
+        executing_tasks[i] = -1;
+        finished_tasks[i] = -1;
+    }
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         if(son_finished){
@@ -468,27 +497,28 @@ int main(int argc, char *argv[]){
             num_transformations = lineSplitter(buffer, transformationsList);
             if(validateInput(&sc,transformationsList,num_transformations)){
                 if(freeSpot == -1)
-                    addTask(tasks, total_nr_tasks, pid, tmp);
+                    addTask(tasks, total_nr_tasks, pid, -1, tmp);
                 else{
-                    addTask(tasks, freeSpot, pid, tmp);
+                    addTask(tasks, freeSpot, pid, -1, tmp);
                     freeSpot = -1;
                 }
                 total_nr_tasks++;
                 if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
                     write(fifo_writer, pendingStatus, strlen(pendingStatus));
-                    updateTask(tasks, total_nr_tasks, pid, "pending");
+                    updateTask(tasks, total_nr_tasks, pid, -1, "pending");
                     pending_tasks[total_pending] = pid;
                     total_pending++;
                     close(fifo_reader);
                 }
                 else{
                     write(fifo_writer, executingStatus, strlen(executingStatus));
-                    updateTask(tasks, total_nr_tasks, pid, "executing");
                     updateResources(&sc, transformationsList, num_transformations, "increase");
-                    int executing_pid = dummyExecute();
+                    executing_pid = dummyExecute();
+                    updateTask(tasks, total_nr_tasks, pid, executing_pid, "executing");
                     executing_tasks[total_executing] = executing_pid;
                     total_executing++;
                     close(fifo_reader);
+                    close(fifo_writer);
                     // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
                     //     write(fifo_reader, fileError, strlen(fileError));
                     //updateTask(tasks, total_nr_tasks, pid, "concluded");
