@@ -261,13 +261,14 @@ bool removeElement(int arr[], int pos, int nr_elems){
     return false;
 }
 
-Trans getTrans(Trans transf, char name[])
-{
+// Function to get a transformation
+Trans getTrans(Trans transf, char name[]){
     while(transf && strcmp(transf->operation_name, name)!=0)
         transf = transf->next;
     return transf;
 }
 
+// Function to execute a set of transformations
 int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
     int pid, status;
     int input = open(transformationsList[2],O_RDONLY, 0777);
