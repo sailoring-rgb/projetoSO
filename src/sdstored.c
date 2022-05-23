@@ -324,11 +324,6 @@ int executeTaks(Trans *transf, char *transformationsList[], int num_transformati
                         }
                 }
             }
-            // sleep(10);
-            // exit(status);
-        default:
-          // waitpid(pid, &status, 0);
-          ;
         }
     return 1;
 }
@@ -363,13 +358,36 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
             printMessage(fileError);
         close(pendingFifoList[ret]);
         removeElement(pendingFifoList, ret, nr_pending);
-        //updateTask(tasks, nr_tasks, pid, "concluded");
-        //updateResources(&sc, transformationsList, num_transformations, "decrease");
+        updateTask(tasks, nr_tasks, pid, "concluded");
+        updateResources(&sc, transformationsList, num_transformations, "decrease");
     }
 
     return ret;
 }
 
+// ********* FOR TESTING
+bool son_finished = true;
+int size = 10;
+int pending_tasks[10], pending_fifos[10], executing_tasks[10], executing_fifos[10], finished_tasks[10], finished_fifos[10];
+int total_executing = 0, total_pending = 0, total_finished = 0;
+
+void sigchild_handler(int signum){
+    int i = 0;
+    while(finished_tasks[i] != -1 && i < size) i++;
+        if(i < size)
+            finished_tasks[i] = pid;
+    son_finished = true;
+}
+
+void dummyExecute(int pid){
+    switch (fork()){
+    case -1:
+        printMessage(forkError);
+    case 0:
+        sleep(10);
+        exit(pid);
+    }
+}
 
 
 // **************** MAIN ****************
@@ -389,7 +407,7 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-    if (signal(SIGINT, sigterm_handler) == SIG_ERR)
+    if (signal(SIGINT, sigterm_handler) == SIG_ERR || signal(SIGCHLD, sigchild_handler) == SIG_ERR)
         printMessage(signalError);
 
     // Creating communication channel
@@ -399,11 +417,9 @@ int main(int argc, char *argv[]){
     }
 
     int pid, fifo_reader, fifo_writer, num_transformations;
-    int freeSpot = -1, read_bytes = 0, total_executing = 0, total_pending = 0, total_nr_tasks = 0, max_nr_tasks = 10;
+    int freeSpot = -1, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MAX_BUFF_SIZE];
-    int pending_tasks[10], pending_fifos[10], executing_tasks[10], executing_fifos[10];
-    
     channel = open(fifo, O_RDWR);
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
@@ -411,6 +427,12 @@ int main(int argc, char *argv[]){
         tasks[i].id = -1;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
+        if(son_finished){
+            printMessage("A SON HAS FINISHED WORKING\n");
+            //close(fifo_reader);
+            son_finished = false;
+        }
+
         if(total_nr_tasks == max_nr_tasks){
             freeSpot = checkForSpot(tasks, max_nr_tasks);
             if(freeSpot == -1){
@@ -453,10 +475,9 @@ int main(int argc, char *argv[]){
                     executing_tasks[total_executing] = pid;
                     executing_fifos[total_executing] = fifo_writer;
                     total_executing++;
-                    if (executeTaks(&sc,transformationsList,num_transformations) == 0)
-                        write(fifo_reader, fileError, strlen(fileError));
                     close(fifo_reader);
-                    close(fifo_writer);
+                    // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
+                    //     write(fifo_reader, fileError, strlen(fileError));
                     //updateTask(tasks, total_nr_tasks, pid, "concluded");
                     //updateResources(&sc, transformationsList, num_transformations, "decrease");
                     
@@ -503,9 +524,9 @@ int main(int argc, char *argv[]){
             }
         }
         // this doesn't seem to work :(
-        if (executePending(pending_tasks, pending_fifos, total_pending, &sc, tasks, total_nr_tasks) != -1){
-               total_pending--;
-        }
+        // if (executePending(pending_tasks, pending_fifos, total_pending, &sc, tasks, total_nr_tasks) != -1){
+        //        total_pending--;
+        // }
     }
 
     unlink(fifo);
