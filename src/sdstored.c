@@ -33,7 +33,8 @@ typedef struct Transformation{
 
 // Task information
 typedef struct Task{
-    int id;
+    pid_t pid_request;
+    pid_t pid_executing;
     char command[128];
     char status[16];
 } Task;
@@ -160,12 +161,12 @@ void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
     buff[0]= '\0';
 
     for(i = 0; i < nr_tasks; i++){
-        if(tasks[i].id != -1){
+        if(tasks[i].pid_request != -1){
             counter++;
             total_bytes = sprintf(
             buff, "[Task #%d] %d: %s\n%s\n",
             counter,
-            tasks[i].id,
+            tasks[i].pid_request,
             tasks[i].command,
             tasks[i].status);
 
@@ -188,7 +189,7 @@ bool updateTaskSize(Task ** tasks, int new_size){
 
 // Function to create a task
 void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
-    tasks[total_nr_tasks].id = task_id;
+    tasks[total_nr_tasks].pid_request = task_id;
     strcpy(tasks[total_nr_tasks].command,command);
     strcpy(tasks[total_nr_tasks].status,"pending");
 }
@@ -197,8 +198,8 @@ void addTask(Task * tasks, int total_nr_tasks, int task_id, char command[]){
 void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
     if(strcmp(status, "concluded") == 0){
         for(int i = 0; i < total_nr_tasks; i++){
-            if (tasks[i].id == task_id){
-                tasks[i].id = -1;
+            if (tasks[i].pid_request == task_id){
+                tasks[i].pid_request = -1;
                 strcpy(tasks[i].command,"");
                 strcpy(tasks[i].status,"");
                 break;
@@ -207,7 +208,7 @@ void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
     }
     else{
         for(int i = 0; i < total_nr_tasks; i++){
-            if (tasks[i].id == task_id){
+            if (tasks[i].pid_request == task_id){
                 strcpy(tasks[i].status,status);
                 break;
             }
@@ -219,7 +220,7 @@ void updateTask(Task * tasks, int total_nr_tasks, int task_id, char status[]){
 int checkForSpot(Task * tasks, int max_nr_tasks){
     int res = -1;
     for(int i = 0; i < max_nr_tasks; i++){
-        if (tasks[i].id == -1){
+        if (tasks[i].pid_request == -1){
             res = i;
             break;
         }
@@ -270,7 +271,8 @@ Trans getTrans(Trans transf, char name[]){
 
 // Function to execute a set of transformations
 int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
-    int pid, status;
+    pid_t pid;
+    int status;
     int input = open(transformationsList[2],O_RDONLY, 0777);
     int output = open(transformationsList[3], O_RDWR | O_CREAT ,0777);
 
@@ -338,7 +340,7 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
     for(i = 0; i < nr_pending; i++){
         pid = pendingList[i];
         j = 0;
-        while(tasks[j].id != pid && j < nr_tasks)
+        while(tasks[j].pid_request != pid && j < nr_tasks)
             j++;
         if (j < nr_tasks){
             strcpy(buffer, tasks[j].command);
@@ -369,27 +371,35 @@ int executePending(int pendingList[], int pendingFifoList[], int nr_pending, Tra
 // ********* FOR TESTING
 bool son_finished = true;
 int size = 10;
-int pending_tasks[10], pending_fifos[10], executing_tasks[10], executing_fifos[10], finished_tasks[10], finished_fifos[10];
+int pending_tasks[10], executing_tasks[10], finished_tasks[10] ;
 int total_executing = 0, total_pending = 0, total_finished = 0;
 
 void sigchild_handler(int signum){
-    int i = 0;
-    while(finished_tasks[i] != -1 && i < size) i++;
-        if(i < size)
-            finished_tasks[i] = pid;
-    son_finished = true;
+    
 }
 
-void dummyExecute(int pid){
-    switch (fork()){
+void sigchild_handler(int signum){
+    pid_t pid;
+    int status;
+    son_finished = true;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0){
+        //unregister_child(pid, status);  
+        // Function to update global variables
+    }
+}
+
+int dummyExecute(){
+    pid_t pid;
+    switch (pid = fork()){
     case -1:
         printMessage(forkError);
     case 0:
         sleep(10);
         exit(pid);
+    default:
+        return pid;
     }
 }
-
 
 // **************** MAIN ****************
 int main(int argc, char *argv[]){
@@ -416,8 +426,8 @@ int main(int argc, char *argv[]){
         printMessage(fifoError);
         return 0;
     }
-
-    int pid, fifo_reader, fifo_writer, num_transformations;
+    pid_t pid;
+    int fifo_reader, fifo_writer, num_transformations;
     int freeSpot = -1, read_bytes = 0, total_nr_tasks = 0, max_nr_tasks = 10;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MAX_BUFF_SIZE];
@@ -425,7 +435,7 @@ int main(int argc, char *argv[]){
     tasks = malloc(sizeof(struct Task) * max_nr_tasks);
 
     for(int i = 0; i < max_nr_tasks; i++)
-        tasks[i].id = -1;
+        tasks[i].pid_request = -1;
 
     while(read(channel, &pid, sizeof(pid)) > 0){
         if(son_finished){
@@ -437,8 +447,11 @@ int main(int argc, char *argv[]){
         if(total_nr_tasks == max_nr_tasks){
             freeSpot = checkForSpot(tasks, max_nr_tasks);
             if(freeSpot == -1){
+                int old_size = max_nr_tasks;
                 max_nr_tasks += 5;
                 updateTaskSize(&tasks, max_nr_tasks);
+                for(int i = old_size; i < max_nr_tasks; i++)
+                    tasks[i].pid_request = -1;
             }
         }
         
@@ -465,7 +478,6 @@ int main(int argc, char *argv[]){
                     write(fifo_writer, pendingStatus, strlen(pendingStatus));
                     updateTask(tasks, total_nr_tasks, pid, "pending");
                     pending_tasks[total_pending] = pid;
-                    pending_fifos[total_nr_tasks] = fifo_writer;
                     total_pending++;
                     close(fifo_reader);
                 }
@@ -473,8 +485,8 @@ int main(int argc, char *argv[]){
                     write(fifo_writer, executingStatus, strlen(executingStatus));
                     updateTask(tasks, total_nr_tasks, pid, "executing");
                     updateResources(&sc, transformationsList, num_transformations, "increase");
-                    executing_tasks[total_executing] = pid;
-                    executing_fifos[total_executing] = fifo_writer;
+                    int executing_pid = dummyExecute();
+                    executing_tasks[total_executing] = executing_pid;
                     total_executing++;
                     close(fifo_reader);
                     // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
@@ -524,6 +536,8 @@ int main(int argc, char *argv[]){
                     close(fifo_writer);
             }
         }
+
+        //INSERT AN ALARM TO PERIODICALLY CHECK IF SOMETHING NEEDS TO BE checked regarding resources
         // this doesn't seem to work :(
         // if (executePending(pending_tasks, pending_fifos, total_pending, &sc, tasks, total_nr_tasks) != -1){
         //        total_pending--;
