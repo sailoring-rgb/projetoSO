@@ -17,6 +17,7 @@
 #define fifoError "[ERROR] Can't create fifo.\n"
 #define requestError "[ERROR] Invalid request.\n"
 #define MAX_BUFF_SIZE 1024
+#define MED_BUFF_SIZE 512
 
 // **************** GLOBAL VARIABLES ****************
 char fifo[] = "../tmp/fifo";
