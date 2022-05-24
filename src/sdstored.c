@@ -306,7 +306,6 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
             if(strcmp((*tr)->operation_name, transformations[i]) == 0)
                 resources_needed++;
         }
-        
         if((*tr)->max_operation_allowed < (resources_needed + (*tr)->currently_running))
             space_available = false;
         tr = & ((*tr)->next);
@@ -334,7 +333,7 @@ int dummyExecute(){
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
     int num_transformations, executing_pid;
-    char * transformationsList[SMALL_BUFF_SIZE];
+    char * transformationsList[MED_BUFF_SIZE];
     
     while(* tr){
         num_transformations = lineSplitter((*tr)->command, transformationsList);
@@ -353,7 +352,7 @@ void checkPendingTasks(){
 // Função para tratar uma tarefa já executada
 void cleanFinishedTasks(pid_t pid_ex, int status){
     int num_transformations;
-    char * transformationsList[SMALL_BUFF_SIZE];
+    char * transformationsList[MED_BUFF_SIZE];
     Task * tmp = &executing_tasks;
     if(WIFEXITED(status)){
         while(* tmp && ((*tmp)->pid_executing != pid_ex))
@@ -425,7 +424,7 @@ int main(int argc, char *argv[]){
     int fifo_reader, fifo_writer, num_transformations;
     int read_bytes = 0;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
-    char * transformationsList[SMALL_BUFF_SIZE];
+    char * transformationsList[MED_BUFF_SIZE];
     
     channel = open(fifo, O_RDWR);
 
