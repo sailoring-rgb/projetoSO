@@ -211,8 +211,7 @@ void closePipes(int file_des[][2], int nrPipes){
 
 
 // Function to show server status
-void sendStatus(int writer){
-    Trans * tr = &sc;
+void sendStatus(Trans * tr, int writer){
     Task * executing = &executing_tasks;
     Task * pending = &pending_tasks;
     char buff[MAX_BUFF_SIZE] = "";
@@ -257,8 +256,7 @@ void sendStatus(int writer){
 }
 
 // Function to ocuppy resources
-void occupyResources(char * transformations[], int nrTrans){
-    Trans * tr = &sc;
+void occupyResources(Trans * tr, char * transformations[], int nrTrans){
     while(* tr){
         for(int i = 2; i < nrTrans; i++){
             if(strcmp((*tr)->operation_name, transformations[i]) == 0)
@@ -269,8 +267,7 @@ void occupyResources(char * transformations[], int nrTrans){
 }
 
 // Function to free resources
-void freeResources(char * transformations[], int nrTrans){
-    Trans * tr = &sc;
+void freeResources(Trans * tr, char * transformations[], int nrTrans){
     while(* tr){
             for(int i = 2; i < nrTrans; i++){
                 if(strcmp((*tr)->operation_name, transformations[i]) == 0)
@@ -298,18 +295,21 @@ bool validateInput(Trans * tr, char * transformations[], int nrTrans){
     return space_available;
 }
 
+// STILL NEEDS TO BE DOUBLE CHECKED
 // Function for cheking if resources are free
 bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTrans){
     int resources_needed;
     bool space_available = true;
     while(* tr  && space_available){
         resources_needed = 0;
-        for(int i = 2; i < nrTrans && space_available; i++){
+        for(int i = 2; i < nrTrans; i++){
             if(strcmp((*tr)->operation_name, transformations[i]) == 0)
                 resources_needed++;
         }
-        if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed))
-            space_available = false;
+        if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed)){
+            return false;
+        }
+            
         tr = & ((*tr)->next);
     }
     return space_available;
@@ -329,7 +329,6 @@ int dummyExecute(){
     return pid;
 }
 
-// STILL NEEDS TO BE DOUBLE CHECKED
 // Função para atualizar a lista de tarefas pendentes
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
@@ -340,7 +339,7 @@ void checkPendingTasks(){
         num_transformations = lineSplitter((*tr)->command, transformationsList);
         if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
             write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
-            occupyResources(transformationsList, num_transformations);
+            occupyResources(&sc,transformationsList, num_transformations);
             executing_pid = dummyExecute();
             loadTasks(&executing_tasks, (*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
             updateStatusTaskByRequestPID(&executing_tasks, (*tr)->pid_request, "executing");
@@ -360,24 +359,18 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
     if(WIFEXITED(status)){
         while(* tmp && ((*tmp)->pid_executing != pid_ex))
             tmp = & ((*tmp)->next);
-    }
-    if(* tmp){
-        write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
-        close((*tmp)->fd_writter);
-        num_transformations = lineSplitter((*tmp)->command, transformationsList);
-        freeResources(transformationsList, num_transformations);
-        deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);
+        
+        if(* tmp){
+            write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
+            num_transformations = lineSplitter((*tmp)->command, transformationsList);
+            freeResources(&sc, transformationsList, num_transformations);
+            close((*tmp)->fd_writter);
+            deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);
+        }
     }
 }
 
 // **************** SIGNAL HANDLING ****************
-// Handler para sinal SIGALARM
-void sigalarm_handler(int signum){
-    printMessage("ALARM TIME\n");
-    checkPendingTasks();
-    alarm(3);
-}
-
 // Handler para sinal SIGCHLD
 void sigchild_handler(int signum){
     pid_t pid;
@@ -385,6 +378,13 @@ void sigchild_handler(int signum){
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0){
         cleanFinishedTasks(pid, status);
     }
+}
+
+// Handler para sinal SIGALARM
+void sigalarm_handler(int signum){
+    printMessage("ALARM TIME\n");
+    checkPendingTasks();
+    alarm(1);
 }
 
 // Routine for handling SIGTERM
@@ -431,7 +431,7 @@ int main(int argc, char *argv[]){
     
     channel = open(fifo, O_RDWR);
 
-    alarm(5);
+    alarm(1);
     
     while(read(channel, &pid, sizeof(pid)) > 0){
         sprintf(pid_writing, "../tmp/%d_writer", pid);
@@ -452,7 +452,7 @@ int main(int argc, char *argv[]){
             }
             else{
                 write(fifo_writer, executingStatus, strlen(executingStatus));
-                occupyResources(transformationsList, num_transformations);
+                occupyResources(&sc, transformationsList, num_transformations);
                     // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
                     //     write(fifo_writer, fileError, strlen(fileError));
                 executing_pid = dummyExecute();
@@ -470,7 +470,7 @@ int main(int argc, char *argv[]){
                     printMessage(forkError);
                     return false;
                 case 0:
-                    sendStatus(fifo_writer);
+                    sendStatus(&sc, fifo_writer);
                     _exit(pid);
                 default:
                     buffer[0] = '\0';                
