@@ -20,7 +20,6 @@ ARGUMENTS:
 #define pendingStatus "Pending.\n"
 #define concludedStatus "Concluded.\n"
 #define executingStatus "Executing.\n"
-#define ARR_SIZE 20
 
 // ******************************** STRUCTS ********************************
 // Transformation information
@@ -97,9 +96,10 @@ Task makeTask(char s[], pid_t pid_r, int fd_wr){
     char * token;
     strcpy(t->command, s);
     token = strtok(s, " ");
-    if(strcmp(token, "0") == 0 || strcmp(token, "0") == 1 || 
-        strcmp(token, "0") == 2 || strcmp(token, "0") == 3 || 
-        strcmp(token, "0") == 4 || strcmp(token, "0") == 5)
+    token = strtok(NULL, " ");
+    if(strcmp(token, "0") == 0 || strcmp(token, "1") == 0 || 
+        strcmp(token, "2") == 0 || strcmp(token, "3") == 0 || 
+        strcmp(token, "4") == 0 || strcmp(token, "5") == 0)
         t->priority = atoi(token);
     else
         t->priority = 0;
@@ -211,9 +211,7 @@ void closePipes(int file_des[][2], int nrPipes){
 
 
 // Function to show server status
-void sendStatus(Trans * tr, int writer){
-    Task * executing = &executing_tasks;
-    Task * pending = &pending_tasks;
+void sendStatus(Trans * tr, Task * executing, Task * pending, int writer){
     char buff[MAX_BUFF_SIZE] = "";
     int counter = 1, total_bytes = 0;
 
@@ -295,7 +293,6 @@ bool validateInput(Trans * tr, char * transformations[], int nrTrans){
     return space_available;
 }
 
-// STILL NEEDS TO BE DOUBLE CHECKED
 // Function for cheking if resources are free
 bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTrans){
     int resources_needed;
@@ -307,9 +304,8 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
                 resources_needed++;
         }
         
-        if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed)){
+        if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed))
             return false;
-        }
             
         tr = & ((*tr)->next);
     }
@@ -320,16 +316,19 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
 int dummyExecute(){
     pid_t pid;
     switch (pid = fork()){
-    case -1:
-        printMessage(forkError);
-    case 0:
-        printMessage("A EXECUTAR\n");
-        sleep(5);
-        _exit(pid);
+        case -1:
+            printMessage(forkError);
+        case 0:
+            printMessage("A EXECUTAR\n");
+            sleep(7);
+            _exit(pid);
+        default:
+            break;
     }
     return pid;
 }
 
+// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!! *********************** 
 // Função para atualizar a lista de tarefas pendentes
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
@@ -346,7 +345,6 @@ void checkPendingTasks(){
             updateStatusTaskByRequestPID(&executing_tasks, (*tr)->pid_request, "executing");
             updateExecPID(&executing_tasks, (*tr)->pid_request, executing_pid);
             deleteTask_byRequestPID(&pending_tasks, (*tr)->pid_request);
-            break;
         }
         tr = & ((*tr)->next);
     }
@@ -363,9 +361,9 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
         
         if(* tmp){
             write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
+            close((*tmp)->fd_writter);
             num_transformations = lineSplitter((*tmp)->command, transformationsList);
             freeResources(&sc, transformationsList, num_transformations);
-            close((*tmp)->fd_writter);
             deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);
         }
     }
@@ -383,8 +381,7 @@ void sigchild_handler(int signum){
 
 // Handler para sinal SIGALARM
 void sigalarm_handler(int signum){
-    printMessage("ALARM TIME\n");
-    checkPendingTasks();
+    //checkPendingTasks();
     alarm(1);
 }
 
@@ -446,44 +443,47 @@ int main(int argc, char *argv[]){
         if(strcmp(buffer, "status")!= 0){
             strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
-            if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
-                write(fifo_writer, pendingStatus, strlen(pendingStatus));
-                loadTasks(&pending_tasks, tmp, pid, fifo_writer);
-                updateStatusTaskByRequestPID(&pending_tasks, pid, "pending");
-            }
-            else{
-                write(fifo_writer, executingStatus, strlen(executingStatus));
-                occupyResources(&sc, transformationsList, num_transformations);
-                    // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
-                    //     write(fifo_writer, fileError, strlen(fileError));
-                executing_pid = dummyExecute();
-                loadTasks(&executing_tasks, tmp, pid, fifo_writer);
-                updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
-                updateExecPID(&executing_tasks, pid, executing_pid);
+            if(validateInput(&sc, transformationsList, num_transformations)){
+                if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
+                    write(fifo_writer, pendingStatus, strlen(pendingStatus));
+                    loadTasks(&pending_tasks, tmp, pid, fifo_writer);
+                    updateStatusTaskByRequestPID(&pending_tasks, pid, "pending");
+                }
+                else{
+                    write(fifo_writer, executingStatus, strlen(executingStatus));
+                    occupyResources(&sc, transformationsList, num_transformations);
+                        // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
+                        //     write(fifo_writer, fileError, strlen(fileError));
+                    executing_pid = dummyExecute();
+                    loadTasks(&executing_tasks, tmp, pid, fifo_writer);
+                    updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
+                    updateExecPID(&executing_tasks, pid, executing_pid);
+
+                }
+                close(fifo_reader);
                 buffer[0] = '\0';
                 tmp[0] = '\0';
             }
-            close(fifo_reader);
+            else{
+                write(fifo_writer, inputError, strlen(inputError));
+                close(fifo_reader);
+                close(fifo_writer);
+            }
         }
-        else if(strcmp(buffer, "status") == 0){
-            switch(fork()){
+        else{
+            switch(pid = fork()){
                 case -1:
                     printMessage(forkError);
                     return false;
                 case 0:
-                    sendStatus(&sc, fifo_writer);
+                    sendStatus(&sc, &executing_tasks, &pending_tasks, fifo_writer);
                     _exit(pid);
                 default:
                     buffer[0] = '\0';                
                     close(fifo_reader);
                     close(fifo_writer);
             }
-        }
-        else{
-            write(fifo_writer, inputError, strlen(inputError));
-            close(fifo_reader);
-            close(fifo_writer);
-        }        
+        }   
     }
     unlink(fifo);
     return 0;
