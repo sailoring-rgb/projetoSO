@@ -1,26 +1,34 @@
-/* **************** CLIENT **************** 
+/* ******************************** CLIENT ********************************
 ARGUMENTS:
     -> status
         * check transformation status
-    -> proc-file path_input_file path_output_file transformationList[]
+    -> proc-file priority path_input_file path_output_file transformationList[]
+        * transformation priority (number from 0 to 5, being 5 the max priority)
         * path_input_file: relative path to file to transform
         * path_output_file: relative path to save transformed file
         * transformationList[]: list of transformations
 */
 
-/* **************** COMMANDS **************** 
+/* ******************************** COMMANDS ********************************
     ./sdstore status
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste nop
+    ./sdstore proc-file 0 ../docs/enunciado.pdf ../docs/teste/ nop    <---- COM PRIORIDADE
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste/ nop
 */
 
-// **************** INCLUDES **************** 
+// ******************************** INCLUDES ********************************
 #include "helper.h"
 
-// **************** FUNCTIONS **************** 
+// ******************************** FUNCTIONS ********************************
 // Function to check if the desired transformations are valid
 bool validateRequest(int argc, char *argv[]){
     bool res = true;
-    for(int i = 4; i < argc && res; i++)
+    int index = 0;
+    if (strcmp(argv[2], "0") == 0 || strcmp(argv[2], "1") == 0 || strcmp(argv[2], "2") == 0 ||
+            strcmp(argv[2], "3") == 0 || strcmp(argv[2], "4") == 0 || strcmp(argv[2], "5") == 0)
+            index = 5;
+    else
+        index = 4;
+    for(int i = index ; i < argc && res; i++)
         if(strcmp(argv[i], "bcompress")!= 0 && strcmp(argv[i], "bdecompress")!= 0 
             && strcmp(argv[i], "decrypt")!= 0 && strcmp(argv[i], "encrypt")!= 0 
             && strcmp(argv[i], "gcompress")!= 0 && strcmp(argv[i], "gdecompress")!= 0
@@ -40,7 +48,7 @@ void checkStatus(int reader, int writer){
         write(STDOUT_FILENO, buffer, read_bytes);
 }
 
-// **************** MAIN ****************
+// ******************************** MAIN ********************************
 int main(int argc, char *argv[]){
     if(argc < 2){
         printMessage(argCountError);

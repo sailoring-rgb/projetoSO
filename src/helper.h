@@ -1,4 +1,4 @@
-// **************** INCLUDES **************** 
+// ******************************** INCLUDES ********************************
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-// **************** DEFINES **************** 
+// ******************************** DEFINES ********************************
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define argError "[ERROR] Invalid arguments.\n"
 #define serverError "[ERROR] Server not running.\n"
@@ -18,12 +18,13 @@
 #define requestError "[ERROR] Invalid request.\n"
 #define MAX_BUFF_SIZE 1024
 #define MED_BUFF_SIZE 512
+#define SMALL_BUFF_SIZE 32
 
-// **************** GLOBAL VARIABLES ****************
+// ******************************** GLOBAL VARIABLES ********************************
 char fifo[] = "../tmp/fifo";
 
-// **************** FUNCTIONS ****************
-// Function for printing errors
+// ******************************** FUNCTIONS ********************************
+// Function for printing messsages
 void printMessage(char msg[]){
     write(STDOUT_FILENO, msg, strlen(msg));
 }

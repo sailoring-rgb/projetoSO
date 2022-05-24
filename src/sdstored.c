@@ -1,18 +1,18 @@
-/* **************** SERVER ****************
+/* ******************************** SERVER ********************************
 ARGUMENTS:
     -> path_config path_exec
         * path_config: relative path for configuration file
         * path_exec: relative path for transformations executables
 */
 
-/* **************** COMMANDS **************** 
+/* ******************************** COMMANDS ********************************
     ./sdstored ../configs/sdstored.conf ../bin/SDStore-transf/
 */
 
-// **************** INCLUDES **************** 
+// ******************************** INCLUDES ********************************
 #include "helper.h"
 
-// **************** DEFINES **************** 
+// ******************************** DEFINES ********************************
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 #define inputError "[ERROR] Desired transformations cannot be performed due to server configuration.\n"
@@ -22,10 +22,10 @@ ARGUMENTS:
 #define executingStatus "Executing.\n"
 #define ARR_SIZE 20
 
-// **************** STRUCTS ****************
+// ******************************** STRUCTS ********************************
 // Transformation information
 typedef struct Transformation{
-    char operation_name[64];
+    char operation_name[SMALL_BUFF_SIZE];
     int max_operation_allowed;
     int currently_running;
     struct Trans * next;
@@ -36,19 +36,19 @@ typedef struct Task{
     pid_t pid_request;
     pid_t pid_executing;
     int fd_writter;
-    char command[128];
-    char status[16];
-} Task;
+    int priority;
+    char command[MED_BUFF_SIZE];
+    char status[SMALL_BUFF_SIZE];
+    struct Task * next;
+} * Task;
 
-// **************** GLOBAL VARIABLES ****************
-int pending_tasks[ARR_SIZE], executing_tasks[ARR_SIZE], finished_tasks[ARR_SIZE];
-int total_executing = 0, total_pending = 0, total_finished = 0, total_nr_tasks = 0;
+// ******************************** GLOBAL VARIABLES ********************************
 int channel;
 char transformations_path[MAX_BUFF_SIZE];
 Trans sc;
-Task * tasks;
+Task executing_tasks, pending_tasks;
 
-// **************** FUNCTIONS ****************
+// ******************************** FUNCTIONS ********************************
 // Function to create a transformation
 Trans makeTrans(char s[]){
     Trans t = malloc(sizeof(struct Transformation));
@@ -73,22 +73,6 @@ Trans addTransformation(Trans t, char s[]){
     return t;
 }
 
-// Function to create pipes
-void makePipes(int file_des[][2], int nrPipes){
-    int i;
-    for(i = 0; i < nrPipes; i++)
-        pipe(file_des[i]);
-}
-
-// Function to close pipes
-void closePipes(int file_des[][2], int nrPipes){
-    int i;
-    for (i= 0; i < nrPipes; i++){
-        close(file_des[i][0]);
-        close(file_des[i][1]);
-    }
-}
-
 // Function for server configurations
 int loadServer(char * path[], Trans * tr){
     char buffer[MAX_BUFF_SIZE];
@@ -106,6 +90,196 @@ int loadServer(char * path[], Trans * tr){
     * tr = tmp_tr;
     return 1;
 }
+
+// Function to create a Task
+Task makeTask(char s[], pid_t pid_r, int fd_wr){
+    Task t = malloc(sizeof(struct Task));
+    char * token;
+    strcpy(t->command, s);
+    token = strtok(s, " ");
+    if(strcmp(token, "0") == 0 || strcmp(token, "0") == 1 || 
+        strcmp(token, "0") == 2 || strcmp(token, "0") == 3 || 
+        strcmp(token, "0") == 4 || strcmp(token, "0") == 5)
+        t->priority = atoi(token);
+    else
+        t->priority = 0;
+    strcpy(t->status, "pending");
+    t->pid_request = pid_r;
+    t->pid_executing = -1;
+    t->fd_writter = fd_wr;
+    t->next = NULL;
+    return t;
+}
+
+// Function to add a task
+Task addTask(Task t, char s[], pid_t pid_r, int fd_wr){
+    Task new = makeTask(s, pid_r, fd_wr);
+    Task * ptr = &t;
+    while(* ptr && ((*ptr)->priority) > new->priority)
+        ptr = & ((*ptr)->next);
+    new->next = (*ptr);
+    (*ptr) = new;
+    return t;
+}
+
+// Function to load tasks
+int loadTasks(Task * tr , char command[], pid_t pid_r, int fd_wr){
+    Task tmp_tr = NULL;
+    tmp_tr = addTask(tmp_tr, command, pid_r, fd_wr);
+    * tr = tmp_tr;
+    return 1;
+}
+
+// Function to delete a Task searching by request PID
+void deleteTask_byRequestPID(Task * head_ref, pid_t key){
+    Task temp = * head_ref, prev;
+    if (temp != NULL && temp->pid_request == key) {
+        *head_ref = temp->next;
+        free(temp);
+        return;
+    }
+    while (temp != NULL && temp->pid_request != key) {
+        prev = temp;
+        temp = temp->next;
+    }
+    if (temp == NULL)
+        return;
+    prev->next = temp->next;
+    free(temp);
+}
+
+// Function to delete a Task searching by execute PID
+void deleteTask_byExecPID(Task * head_ref, pid_t key){
+    Task temp = * head_ref, prev;
+    if (temp != NULL && temp->pid_executing == key) {
+        *head_ref = temp->next;
+        free(temp);
+        return;
+    }
+    while (temp != NULL && temp->pid_executing != key) {
+        prev = temp;
+        temp = temp->next;
+    }
+    if (temp == NULL)
+        return;
+    prev->next = temp->next;
+    free(temp);
+}
+
+// Function to update task status by requestPID
+void updateExecPID(Task * ptr, pid_t task_id, pid_t exec_pid){
+    while(* ptr && ((*ptr)->pid_request) != task_id)
+        ptr = & ((*ptr)->next);
+    if(* ptr){
+        (*ptr)->pid_executing = exec_pid;
+    }
+}
+
+// Function to update task status by requestPID
+void updateStatusTaskByRequestPID(Task * ptr, pid_t task_id, char status[]){
+    while(* ptr && ((*ptr)->pid_request) != task_id)
+        ptr = & ((*ptr)->next);
+    if(* ptr){
+        strcpy((*ptr)->status, status);
+    }
+}
+
+// Function to update task status by requestPID
+void updateStatusTaskByExecPID(Task * ptr, pid_t pid_exec, char status[]){
+    while(* ptr && ((*ptr)->pid_executing) != pid_exec)
+        ptr = & ((*ptr)->next);
+    if(* ptr){
+        strcpy((*ptr)->status, status);
+    }
+}
+
+// Function to create pipes
+void makePipes(int file_des[][2], int nrPipes){
+    int i;
+    for(i = 0; i < nrPipes; i++)
+        pipe(file_des[i]);
+}
+
+// Function to close pipes
+void closePipes(int file_des[][2], int nrPipes){
+    int i;
+    for (i= 0; i < nrPipes; i++){
+        close(file_des[i][0]);
+        close(file_des[i][1]);
+    }
+}
+
+
+// Function to show server status
+void sendStatus(int writer){
+    Trans * tr = &sc;
+    Task * executing = &executing_tasks;
+    Task * pending = &pending_tasks;
+    char buff[MAX_BUFF_SIZE] = "";
+    int counter = 1, total_bytes = 0;
+
+    while(* tr){
+        total_bytes = sprintf(
+            buff, "[Transformation] %s: %d/%d running/max\n",
+            (*tr)->operation_name, 
+            (*tr)->currently_running,
+            (*tr)->max_operation_allowed);
+        write(writer, buff, total_bytes);
+        buff[0]= '\0';
+        tr = & ((*tr)->next);
+    }
+    buff[0]= '\0';
+    while(* executing){
+        total_bytes = sprintf(
+                buff, "[Task #%d] %d: %s\nPriority: %d | Status: %s\n",
+                counter++,
+                (*executing)->pid_request, 
+                (*executing)->command,
+                (*executing)->priority,
+                (*executing)->status);
+        write(writer, buff, total_bytes);
+        buff[0]= '\0';
+        executing = & ((*executing)->next);
+    }
+    buff[0]= '\0';
+    while(* pending){
+        total_bytes = sprintf(
+                buff, "[Task #%d] %d: %s\nPriority: %d | Status: %s\n",
+                counter++,
+                (*pending)->pid_request, 
+                (*pending)->command,
+                (*pending)->priority,
+                (*pending)->status);
+        write(writer, buff, total_bytes);
+        buff[0]= '\0';
+        pending = & ((*pending)->next);
+    }
+}
+
+// Function to ocuppy resources
+void occupyResources(char * transformations[], int nrTrans){
+    Trans * tr = &sc;
+    while(* tr){
+        for(int i = 2; i < nrTrans; i++){
+            if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                (*tr)->currently_running++;
+            }
+        tr = & ((*tr)->next);
+    }
+}
+
+// Function to free resources
+void freeResources(char * transformations[], int nrTrans){
+    Trans * tr = &sc;
+    while(* tr){
+            for(int i = 2; i < nrTrans; i++){
+                if(strcmp((*tr)->operation_name, transformations[i]) == 0)
+                    (*tr)->currently_running--;
+                }
+        tr = & ((*tr)->next);
+    }
+}
+
 
 // Function for validating requet
 bool validateInput(Trans * tr, char * transformations[], int nrTrans){
@@ -141,208 +315,7 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
     return space_available;
 }
 
-// Routine for handling sigterm
-void sigterm_handler(int sig){
-    close(channel);
-}
-
-// Function to show server status
-void sendStatus(int writer, Trans * tr, Task * tasks, int nr_tasks){
-    char buff[MAX_BUFF_SIZE]= "";
-    int i, counter = 0, total_bytes = 0;
-
-    while(* tr){
-    total_bytes = sprintf(
-        buff, "[Transformation] %s: %d/%d running/max\n",
-        (*tr)->operation_name, 
-        (*tr)->currently_running,
-        (*tr)->max_operation_allowed);
-
-    write(writer, buff, total_bytes);
-    buff[0]= '\0';
-
-    tr = & ((*tr)->next);
-    }
-
-    buff[0]= '\0';
-
-    for(i = 0; i < nr_tasks; i++){
-        if(tasks[i].pid_request != -1){
-            counter++;
-            total_bytes = sprintf(
-            buff, "[Task #%d] %d: %s\n%s\n",
-            counter,
-            tasks[i].pid_request,
-            tasks[i].command,
-            tasks[i].status);
-
-            write(writer, buff, total_bytes);
-            buff[0]= '\0';
-        }
-    }
-}
-
-// Function to realoc memory for tasks
-bool updateSizeTasks(Task ** tasks, int new_size){
-    bool res = false;
-    Task * temp = realloc(*tasks, (new_size * sizeof(Task)));
-    if (temp != NULL){
-        * tasks = temp;
-        res = true;
-    }
-    return res;
-}
-
-// Function to create a task
-void addTask(Task * tasks, int total_nr_tasks, int task_id, int exec_id, int fd_w, char command[]){
-    tasks[total_nr_tasks].pid_request = task_id;
-    tasks[total_nr_tasks].pid_executing = exec_id;
-    tasks[total_nr_tasks].fd_writter = fd_w;
-    strcpy(tasks[total_nr_tasks].command,command);
-    strcpy(tasks[total_nr_tasks].status,"pending");
-}
-
-// Function to update a tasks' status
-void updateTask(Task * tasks, int task_id, int exec_id, char status[]){
-    if(strcmp(status, "concluded") == 0){
-        for(int i = 0; i < total_nr_tasks; i++){
-            if (tasks[i].pid_request == task_id){
-                tasks[i].pid_request = -1;
-                //tasks[i].pid_executing = -1;
-                strcpy(tasks[i].command,"");
-                strcpy(tasks[i].status,"");
-                total_nr_tasks--;
-                break;
-            }
-        }
-    }
-    else{
-        for(int i = 0; i < total_nr_tasks; i++){
-            if (tasks[i].pid_request == task_id){
-                tasks[i].pid_executing = exec_id;
-                strcpy(tasks[i].status,status);
-                break;
-            }
-        }
-    }
-}
-
-// Function to check if some information is outdated and can be overwritten
-int checkForSpot(Task * tasks, int max_nr_tasks){
-    int res = -1;
-    for(int i = 0; i < max_nr_tasks; i++){
-        if (tasks[i].pid_request == -1){
-            res = i;
-            break;
-        }
-    }
-    return res;
-}
-
-// Function to update running resources
-void updateResources(Trans * tr, char * transformations[], int nrTrans, char mode[]){
-    if(strcmp(mode, "increase") == 0){
-        while(* tr){
-            for(int i = 2; i < nrTrans; i++){
-                if(strcmp((*tr)->operation_name, transformations[i]) == 0)
-                    (*tr)->currently_running++;
-                }
-            tr = & ((*tr)->next);
-
-        }
-    }
-    else{
-        while(* tr){
-            for(int i = 2; i < nrTrans; i++){
-                if(strcmp((*tr)->operation_name, transformations[i]) == 0)
-                    (*tr)->currently_running--;
-                }
-        tr = & ((*tr)->next);
-        }
-    }
-}
-
-// Function to remove an elemnt from an array
-bool removeElement(int arr[], int pos, int nr_elems){
-    if (pos >= nr_elems + 1){
-        for (int i = pos - 1; i < nr_elems -1; i++){  
-                arr[i] = arr[i+1];  
-            }
-        return true;
-    }
-    return false;
-}
-
-// Function to get a transformation
-Trans getTrans(Trans transf, char name[]){
-    while(transf && strcmp(transf->operation_name, name)!=0)
-        transf = transf->next;
-    return transf;
-}
-
-// Function to execute a set of transformations
-int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
-    pid_t pid;
-    int input = open(transformationsList[2],O_RDONLY, 0777);
-    int output = open(transformationsList[3], O_RDWR | O_CREAT ,0777);
-
-    if(input  < 0 || output < 0)
-        return 0;
-    
-    int fildes[num_transformations-4][2];
-
-    switch(pid = fork()){
-        case -1:
-            wait(NULL);
-            printMessage(forkError);
-            close(input);
-            close(output);
-        case 0:
-            if(num_transformations == 5){
-                Trans *t = getTrans(&transf,transformationsList[4]);
-                dup2(input,0);
-                dup2(output,1);
-                execl((*t)->operation_name,(*t)->operation_name,NULL);
-            } else {
-                makePipes(fildes,num_transformations-4);
-
-                for(int i = 4; i < num_transformations; i++){
-                    Trans *t = getTrans(&transf,transformationsList[i]);
-                    if((pid = fork()) == 0){
-
-                        if(i == num_transformations-1){
-                            dup2(input,0);
-                            dup2(fildes[i-5][1],1);
-                            closePipes(fildes, num_transformations-4);
-                            execl((*t)->operation_name, (*t)->operation_name, NULL);
-                        }
-                    }
-                    else
-                        if(i == 4) {
-                            dup2(output,1);
-                            dup2(fildes[i-4][0],0);
-                            closePipes(fildes,num_transformations-4);
-                            execl((*t)->operation_name, (*t)->operation_name, NULL);
-                        }
-                        else
-                            if(i != num_transformations-1){
-                                dup2(fildes[i-4][0],0);
-                                dup2(fildes[i-5][1],1);
-                                closePipes(fildes,num_transformations-4);
-                                execl((*t)->operation_name, (*t)->operation_name, NULL);
-                            }
-                        else{
-                            closePipes(fildes, num_transformations-1);
-                            _exit(0);
-                        }
-                }
-            }
-        }
-    return 1;
-}
-
-
-// ********* FOR TESTING
+// ***** FOR TESTING
 int dummyExecute(){
     pid_t pid;
     switch (pid = fork()){
@@ -350,119 +323,58 @@ int dummyExecute(){
         printMessage(forkError);
     case 0:
         printMessage("A EXECUTAR\n");
-        sleep(2);
+        sleep(5);
         _exit(pid);
     }
     return pid;
 }
 
-
-// Função para atualizar as listas de PIDs
-void moveFinishedTasks(pid_t pid, int status){
-    int i = 0;
-    if(WIFEXITED(status)){
-        while((executing_tasks[i] != pid) && (i < ARR_SIZE))
-            i++;
-        if (i < ARR_SIZE){
-            removeElement(executing_tasks, i, ARR_SIZE);
-            total_executing--;
-            i = 0;
-            while((finished_tasks[i] != -1) && (i < ARR_SIZE))
-                i++;
-            if (i < ARR_SIZE){
-                finished_tasks[i] = pid;
-                total_finished++;
-            }
-        }
-    }
-}
-
-// Function to check if a pending task can be done
-int executePending(Trans * sc, Task * tasks){
-    char * transformationsList[MED_BUFF_SIZE], buffer[MAX_BUFF_SIZE];
-    int num_transformations, i, j;
-    pid_t pid, executing_pid;
-    int ret = -1;
-    
-    for(i = 0; i < total_pending; i++){
-        pid = pending_tasks[i];
-        j = 0;
-        while(tasks[j].pid_request != pid && j < total_nr_tasks)
-            j++;
-        if (j < total_nr_tasks){
-            strcpy(buffer, tasks[j].command);
-            num_transformations = lineSplitter(buffer, transformationsList);
-            if (evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
-                printMessage("FOUND ONE\n");
-                ret = i;
-                break;
-            }
-        }
-    }
-
-    if(ret != -1){
-        removeElement(pending_tasks, ret, total_pending);
-        write(tasks[j].fd_writter, executingStatus, strlen(executingStatus));
-        updateResources(&sc, transformationsList, num_transformations, "increase");
-        executing_pid = dummyExecute();
-        updateTask(tasks, pid, executing_pid, "executing");
-        executing_tasks[total_executing] = executing_pid;
-        total_executing++;
-    }
-
-    return ret;
-}
-
+// STILL NEEDS TO BE DOUBLE CHECKED
 // Função para atualizar a lista de tarefas pendentes
-void checkPendingTasks(Trans * sc, Task * tasks){
-    int i, j, num_transformations;
-    pid_t pid_req, executing_pid;
+void checkPendingTasks(){
+    Task * tr = &pending_tasks;
+    int num_transformations, executing_pid;
     char * transformationsList[MED_BUFF_SIZE];
-
-    for(i = 0; i < total_pending; i++){
-        pid_req = pending_tasks[i];
-        for(j = 0; j < total_nr_tasks; j++){
-            if(tasks[j].pid_request == pid_req){
-                num_transformations = lineSplitter(tasks[j].command, transformationsList);
-                if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
-                    write(tasks[j].fd_writter, executingStatus, strlen(executingStatus));
-                    updateResources(&sc, transformationsList, num_transformations, "increase");
-                    executing_pid = dummyExecute();
-                    updateTask(tasks, pid_req, executing_pid, "executing");
-                    executing_tasks[total_executing] = executing_pid;
-                    total_executing++;
-                    removeElement(pending_tasks, i, ARR_SIZE);
-                    pending_tasks[total_pending] = -1;
-                    i--;
-                    total_pending--;
-                }
-            }
+    
+    while(* tr){
+        num_transformations = lineSplitter((*tr)->command, transformationsList);
+        if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
+            write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
+            occupyResources(transformationsList, num_transformations);
+            executing_pid = dummyExecute();
+            loadTasks(&executing_tasks, (*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
+            updateStatusTaskByRequestPID(&executing_tasks, (*tr)->pid_request, "executing");
+            updateExecPID(&executing_tasks, (*tr)->pid_request, executing_pid);
+            deleteTask_byRequestPID(&pending_tasks, (*tr)->pid_request);
+            break;
         }
+        tr = & ((*tr)->next);
     }
 }
 
-// Função para terminar a execução de tarefas e libertar recursos
-void cleanFinishedTasks(pid_t pid_ex, int status, Trans * sc, Task * tasks){
-    int i = 0;
+// Função para tratar uma tarefa já executada
+void cleanFinishedTasks(pid_t pid_ex, int status){
     int num_transformations;
     char * transformationsList[MED_BUFF_SIZE];
+    Task * tmp = &executing_tasks;
     if(WIFEXITED(status)){
-        while((tasks[i].pid_executing != pid_ex) && i < total_nr_tasks)
-            i++;
-        if(i < total_nr_tasks){
-            write(tasks[i].fd_writter, concludedStatus, strlen(concludedStatus));
-            close(tasks[i].fd_writter);
-            num_transformations = lineSplitter(tasks[i].command, transformationsList);
-            updateResources(sc, transformationsList, num_transformations, "decrease");
-            updateTask(tasks, tasks[i].pid_request, tasks[i].pid_executing, "concluded");
-        }
+        while(* tmp && ((*tmp)->pid_executing != pid_ex))
+            tmp = & ((*tmp)->next);
+    }
+    if(* tmp){
+        write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
+        close((*tmp)->fd_writter);
+        num_transformations = lineSplitter((*tmp)->command, transformationsList);
+        freeResources(transformationsList, num_transformations);
+        deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);
     }
 }
 
+// **************** SIGNAL HANDLING ****************
 // Handler para sinal SIGALARM
 void sigalarm_handler(int signum){
     printMessage("ALARM TIME\n");
-    checkPendingTasks(&sc,tasks);
+    checkPendingTasks();
     alarm(3);
 }
 
@@ -471,11 +383,16 @@ void sigchild_handler(int signum){
     pid_t pid;
     int status;
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0){
-        cleanFinishedTasks(pid, status, &sc, tasks);
+        cleanFinishedTasks(pid, status);
     }
 }
 
-// **************** MAIN ****************
+// Routine for handling SIGTERM
+void sigterm_handler(int sig){
+    close(channel);
+}
+
+// ******************************** MAIN ********************************
 int main(int argc, char *argv[]){
     // Checking for argc
     if(argc < 3 || argc > 3){
@@ -484,7 +401,8 @@ int main(int argc, char *argv[]){
     }
 
     sc = NULL;
-    tasks = NULL;
+    executing_tasks = NULL;
+    pending_tasks = NULL;
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
@@ -492,6 +410,7 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
+    // Setting up signal handlers
     if (signal(SIGINT, sigterm_handler) == SIG_ERR || signal(SIGCHLD, sigchild_handler) == SIG_ERR
             || signal(SIGALRM, sigalarm_handler) == SIG_ERR)
         printMessage(signalError);
@@ -505,37 +424,16 @@ int main(int argc, char *argv[]){
     strcpy(transformations_path, argv[2]);
 
     pid_t pid, executing_pid;
-    int fifo_reader, fifo_writer, num_transformations, i;
-    int freeSpot = -1, read_bytes = 0, max_nr_tasks = 10;
+    int fifo_reader, fifo_writer, num_transformations;
+    int read_bytes = 0;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[MED_BUFF_SIZE];
     
     channel = open(fifo, O_RDWR);
-    tasks = malloc(sizeof(struct Task) * max_nr_tasks);
-
-    for(i = 0; i < max_nr_tasks; i++)
-        tasks[i].pid_request = -1;
-
-    for(i = 0; i < ARR_SIZE; i++){
-        pending_tasks[i] = -1;
-        executing_tasks[i] = -1;
-        finished_tasks[i] = -1;
-    }
 
     alarm(5);
     
     while(read(channel, &pid, sizeof(pid)) > 0){
-        if(total_nr_tasks == max_nr_tasks){
-            freeSpot = checkForSpot(tasks, max_nr_tasks);
-            if(freeSpot == -1){
-                int old_size = max_nr_tasks;
-                max_nr_tasks += 5;
-                updateSizeTasks(&tasks, max_nr_tasks);
-                for(int i = old_size; i < max_nr_tasks; i++)
-                    tasks[i].pid_request = -1;
-            }
-        }
-        
         sprintf(pid_writing, "../tmp/%d_writer", pid);
         sprintf(pid_reading, "../tmp/%d_reader", pid);
 
@@ -545,51 +443,34 @@ int main(int argc, char *argv[]){
         buffer[read_bytes] = '\0';
         
         if(strcmp(buffer, "status")!= 0){
-            strcpy(tmp,buffer);
+            strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
-            if(validateInput(&sc,transformationsList,num_transformations)){
-                if(freeSpot == -1)
-                    addTask(tasks, total_nr_tasks, pid, -1, fifo_writer, tmp);
-                else{
-                    addTask(tasks, freeSpot, pid, -1, fifo_writer, tmp);
-                    freeSpot = -1;
-                }
-                total_nr_tasks++;
-                if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
-                    write(fifo_writer, pendingStatus, strlen(pendingStatus));
-                    updateTask(tasks, pid, -1, "pending");
-                    pending_tasks[total_pending] = pid;
-                    total_pending++;
-                    close(fifo_reader);
-                }
-                else{
-                    write(fifo_writer, executingStatus, strlen(executingStatus));
-                    updateResources(&sc, transformationsList, num_transformations, "increase");
-                    executing_pid = dummyExecute();
-                    updateTask(tasks, pid, executing_pid, "executing");
-                    executing_tasks[total_executing] = executing_pid;
-                    total_executing++;
-                    close(fifo_reader);
-                    buffer[0] = '\0';
-                    tmp[0] = '\0';
-                    // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
-                    //     write(fifo_writer, fileError, strlen(fileError));
-                  
-                }
+            if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
+                write(fifo_writer, pendingStatus, strlen(pendingStatus));
+                loadTasks(&pending_tasks, tmp, pid, fifo_writer);
+                updateStatusTaskByRequestPID(&pending_tasks, pid, "pending");
             }
             else{
-                write(fifo_writer, inputError, strlen(inputError));
-                close(fifo_reader);
-                close(fifo_writer);
+                write(fifo_writer, executingStatus, strlen(executingStatus));
+                occupyResources(transformationsList, num_transformations);
+                    // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
+                    //     write(fifo_writer, fileError, strlen(fileError));
+                executing_pid = dummyExecute();
+                loadTasks(&executing_tasks, tmp, pid, fifo_writer);
+                updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
+                updateExecPID(&executing_tasks, pid, executing_pid);
+                buffer[0] = '\0';
+                tmp[0] = '\0';
             }
+            close(fifo_reader);
         }
-        else{
+        else if(strcmp(buffer, "status") == 0){
             switch(fork()){
                 case -1:
                     printMessage(forkError);
                     return false;
                 case 0:
-                    sendStatus(fifo_writer, &sc, tasks, max_nr_tasks);
+                    sendStatus(fifo_writer);
                     _exit(pid);
                 default:
                     buffer[0] = '\0';                
@@ -597,20 +478,95 @@ int main(int argc, char *argv[]){
                     close(fifo_writer);
             }
         }
-
-        //INSERT AN ALARM TO PERIODICALLY CHECK IF SOMETHING NEEDS TO BE checked regarding resources
+        else{
+            write(fifo_writer, inputError, strlen(inputError));
+            close(fifo_reader);
+            close(fifo_writer);
+        }        
     }
     unlink(fifo);
     return 0;
 }
 
-  /*
-    // **** FOR TESTING ****
-    Trans * tr = &sc;
 
-    while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
-        tr = & ((*tr)->next);
-    if(* tr){
-        // WRITE SMTHING HERE
-    }
-    */
+//   /*
+//     // **** FOR TESTING ****
+//     Trans * tr = &sc;
+
+//     while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
+//         tr = & ((*tr)->next);
+//     if(* tr){
+//         // WRITE SMTHING HERE
+//     }
+//     */
+
+
+// ********************* PAULA ******************
+
+// // Function to get a transformation
+// Trans getTrans(Trans transf, char name[]){
+//     while(transf && strcmp(transf->operation_name, name)!=0)
+//         transf = transf->next;
+//     return transf;
+// }
+
+// // Function to execute a set of transformations
+// int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
+//     pid_t pid;
+//     int input = open(transformationsList[2],O_RDONLY, 0777);
+//     int output = open(transformationsList[3], O_RDWR | O_CREAT ,0777);
+
+//     if(input  < 0 || output < 0)
+//         return 0;
+    
+//     int fildes[num_transformations-4][2];
+
+//     switch(pid = fork()){
+//         case -1:
+//             wait(NULL);
+//             printMessage(forkError);
+//             close(input);
+//             close(output);
+//         case 0:
+//             if(num_transformations == 5){
+//                 Trans *t = getTrans(&transf,transformationsList[4]);
+//                 dup2(input,0);
+//                 dup2(output,1);
+//                 execl((*t)->operation_name,(*t)->operation_name,NULL);
+//             } else {
+//                 makePipes(fildes,num_transformations-4);
+
+//                 for(int i = 4; i < num_transformations; i++){
+//                     Trans *t = getTrans(&transf,transformationsList[i]);
+//                     if((pid = fork()) == 0){
+
+//                         if(i == num_transformations-1){
+//                             dup2(input,0);
+//                             dup2(fildes[i-5][1],1);
+//                             closePipes(fildes, num_transformations-4);
+//                             execl((*t)->operation_name, (*t)->operation_name, NULL);
+//                         }
+//                     }
+//                     else
+//                         if(i == 4) {
+//                             dup2(output,1);
+//                             dup2(fildes[i-4][0],0);
+//                             closePipes(fildes,num_transformations-4);
+//                             execl((*t)->operation_name, (*t)->operation_name, NULL);
+//                         }
+//                         else
+//                             if(i != num_transformations-1){
+//                                 dup2(fildes[i-4][0],0);
+//                                 dup2(fildes[i-5][1],1);
+//                                 closePipes(fildes,num_transformations-4);
+//                                 execl((*t)->operation_name, (*t)->operation_name, NULL);
+//                             }
+//                         else{
+//                             closePipes(fildes, num_transformations-1);
+//                             _exit(0);
+//                         }
+//                 }
+//             }
+//         }
+//     return 1;
+// }
