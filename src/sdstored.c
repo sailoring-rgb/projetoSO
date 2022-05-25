@@ -91,7 +91,7 @@ int loadServer(char * path[], Trans * tr){
 }
 
 // Function to create a Task
-Task makeTask(char s[], pid_t pid_r, int fd_wr){
+Task createTask(char s[], pid_t pid_r, int fd_wr){
     Task t = malloc(sizeof(struct Task));
     char * token;
     strcpy(t->command, s);
@@ -111,23 +111,16 @@ Task makeTask(char s[], pid_t pid_r, int fd_wr){
     return t;
 }
 
-// Function to add a task
-Task addTask(Task t, char s[], pid_t pid_r, int fd_wr){
-    Task new = makeTask(s, pid_r, fd_wr);
-    Task * ptr = &t;
-    while(* ptr && ((*ptr)->priority) > new->priority)
-        ptr = & ((*ptr)->next);
-    new->next = (*ptr);
-    (*ptr) = new;
-    return t;
-}
-
-// Function to load tasks
-int loadTasks(Task * tr , char command[], pid_t pid_r, int fd_wr){
-    Task tmp_tr = NULL;
-    tmp_tr = addTask(tr, command, pid_r, fd_wr);
-    * tr = tmp_tr;
-    return 1;
+// Function to insert a task in the LL
+Task taskJoiner(Task old, Task new){
+    if(!old || old->priority < new->priority){
+        new->next = old;
+        return new;
+    }
+    else{
+        old->next = taskJoiner(old->next,new);
+        return old;
+    }
 }
 
 // Function to delete a Task searching by request PID
@@ -328,25 +321,26 @@ int dummyExecute(){
     return pid;
 }
 
-// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!! 
-// *********************** REVER FUNÇÃO DE INSERÇÃO DAS TAREFAS
+// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!!
 // *********************** REVER FUNÇÃO DE REMOÇÃO DAS TAREFAS
 // Função para atualizar a lista de tarefas pendentes
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
+    Task tmp_t = NULL;
     int num_transformations, executing_pid;
     char * transformationsList[SMALL_BUFF_SIZE];
-    
-    while(* tr){
+    while(*tr){
         num_transformations = lineSplitter((*tr)->command, transformationsList);
         if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
             write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
             occupyResources(&sc,transformationsList, num_transformations);
             executing_pid = dummyExecute();
-            loadTasks(&executing_tasks, (*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
+            tmp_t = createTask((*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
+            executing_tasks = taskJoiner(executing_tasks, tmp_t);
             updateStatusTaskByRequestPID(&executing_tasks, (*tr)->pid_request, "executing");
             updateExecPID(&executing_tasks, (*tr)->pid_request, executing_pid);
             deleteTask_byRequestPID(&pending_tasks, (*tr)->pid_request);
+            return;
         }
         tr = & ((*tr)->next);
     }
@@ -360,13 +354,12 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
     if(WIFEXITED(status)){
         while(* tmp && ((*tmp)->pid_executing != pid_ex))
             tmp = & ((*tmp)->next);
-        
         if(* tmp){
-            write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
-            close((*tmp)->fd_writter);
             num_transformations = lineSplitter((*tmp)->command, transformationsList);
             freeResources(&sc, transformationsList, num_transformations);
-            deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);
+            write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
+            close((*tmp)->fd_writter);
+            deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);        
         }
     }
 }
@@ -403,6 +396,7 @@ int main(int argc, char *argv[]){
     sc = NULL;
     executing_tasks = NULL;
     pending_tasks = NULL;
+    Task tmp_t = NULL;
 
     // Loading server configuration
     if(!loadServer(argv, &sc)){
@@ -448,19 +442,20 @@ int main(int argc, char *argv[]){
             if(validateInput(&sc, transformationsList, num_transformations)){
                 if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
                     write(fifo_writer, pendingStatus, strlen(pendingStatus));
-                    loadTasks(&pending_tasks, tmp, pid, fifo_writer);
+                    tmp_t = createTask(tmp, pid, fifo_writer);
+                    pending_tasks = taskJoiner(pending_tasks, tmp_t);
                     updateStatusTaskByRequestPID(&pending_tasks, pid, "pending");
                 }
                 else{
                     write(fifo_writer, executingStatus, strlen(executingStatus));
                     occupyResources(&sc, transformationsList, num_transformations);
+                    tmp_t = createTask(tmp, pid, fifo_writer);
+                    executing_tasks = taskJoiner(executing_tasks, tmp_t);
                         // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
                         //     write(fifo_writer, fileError, strlen(fileError));
                     executing_pid = dummyExecute();
-                    loadTasks(&executing_tasks, tmp, pid, fifo_writer);
                     updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
                     updateExecPID(&executing_tasks, pid, executing_pid);
-
                 }
                 close(fifo_reader);
                 buffer[0] = '\0';
