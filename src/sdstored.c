@@ -409,18 +409,19 @@ int executeTask(char * args[], int size){
                                 closePipes(file_des, nr_transformations);
                                 execl(full_path, args[i], NULL);
                             }
-                            else if(i != nr_transformations){
-                                dup2(file_des[i-2][0], STDIN_FILENO);
-                                dup2(file_des[i-3][1], STDOUT_FILENO);
-                                closePipes(file_des, nr_transformations);
-                                execl(full_path, args[i], NULL);
-                            }                            
                             else if(i == nr_transformations - 1){
                                 dup2(input, STDIN_FILENO);
                                 dup2(file_des[i-3][1], STDOUT_FILENO);
                                 closePipes(file_des, nr_transformations);
                                 execl(full_path, args[i], NULL);
                             }
+                            else if(i != nr_transformations){
+                                dup2(file_des[i-2][0], STDIN_FILENO);
+                                dup2(file_des[i-3][1], STDOUT_FILENO);
+                                closePipes(file_des, nr_transformations);
+                                execl(full_path, args[i], NULL);
+                            }                            
+
                             else{
                                 closePipes(file_des, nr_transformations);
                                 _exit(0);
