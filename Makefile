@@ -20,4 +20,4 @@ dir:
 	mkdir -v bin obj tmp
 	
 clean:
-	rm -v obj/* bin/{sdstore,sdstored} tmp/*
+	rm -v obj/* tmp/* bin/{sdstore,sdstored} 

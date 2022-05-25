@@ -25,10 +25,9 @@ ARGUMENTS:
 #define forkError "[ERROR] Fork unsuccessful.\n"
 #define signalError "[ERROR] Signal handler not established.\n"
 #define inputError "[ERROR] Desired transformations cannot be performed due to server configuration.\n"
-#define fileError "[ERROR] Couldn't find source file.\n"
-#define pendingStatus "Pending.\n"
-#define concludedStatus "Concluded.\n"
-#define executingStatus "Executing.\n"
+#define fileError "[ERROR] Can't open file.\n"
+#define pendingStatus "pending...\n"
+#define processingStatus "processing...\n"
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
 #define serverError "[ERROR] Server not running.\n"
 #define fifoError "[ERROR] Can't create fifo.\n"
@@ -370,13 +369,21 @@ int executeTask(char * args[], int size){
     nr_transformations = size - 2 - index;
     start_index = 2 + index; 
     
-    int input = open(args[index],O_RDONLY, 0666);
-    int output = open(args[index+1], O_CREAT| O_APPEND | O_WRONLY ,0666);
+    int input, output;
+    if((input = open(args[index],O_RDONLY, 0666)) == -1){
+        printMessage(fileError);
+        return -1;
+    }
+    
+    if((output = open(args[index+1], O_CREAT| O_APPEND | O_WRONLY ,0666)) == -1){
+        printMessage(fileError);
+        return -1;
+    }
 
     int file_des[nr_transformations][2];
     char full_path[MAX_BUFF_SIZE];
     
-    switch (pid = fork()){
+    switch(pid = fork()){
         case -1:
             printMessage(forkError);
         case 0:
@@ -392,7 +399,7 @@ int executeTask(char * args[], int size){
                 strcpy(full_path, transformations_path);
                 for(int i = start_index; i < nr_transformations; i++){
                     strcat(full_path, args[i]);
-                    switch (fork()){
+                    switch(fork()){
                         case -1:
                             printMessage(forkError);
                         case 0:
@@ -418,6 +425,9 @@ int executeTask(char * args[], int size){
                                 closePipes(file_des, nr_transformations);
                                 _exit(0);
                             }
+                        default:
+                            close(input);
+                            close(output);
                     }
                 }
             }
@@ -425,8 +435,10 @@ int executeTask(char * args[], int size){
         default:
             close(input);
             close(output);
-            break;
     }
+
+    close(input);
+    close(output);
     return pid;
 }
 
@@ -441,7 +453,7 @@ void checkPendingTasks(){
         strcpy(tmp, (*tr)->command);
         num_transformations = lineSplitter(tmp, transformationsList);
         if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
-            write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
+            write((*tr)->fd_writter, processingStatus, strlen(processingStatus));
             occupyResources(&sc,transformationsList, num_transformations);
             executing_pid = executeTask(transformationsList + 1, num_transformations - 1);
             tmp_t = createTask((*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
@@ -455,10 +467,41 @@ void checkPendingTasks(){
     }
 }
 
+
+// ************** STILL NEEDS TO BE REVIEWED *************/
+// Function to determine file size
+off_t calculateSize(char * args[], int offset){
+    int index, fd;
+    off_t size = 0;
+    struct stat st;
+
+    if(strcmp(args[0], "0") == 0 || strcmp(args[0], "1") == 0 || 
+        strcmp(args[0], "2") == 0 || strcmp(args[0], "3") == 0 || 
+        strcmp(args[0], "4") == 0 || strcmp(args[0], "5") == 0)
+        index = 1;
+    else
+        index = 0;
+    if(offset == 1)
+        index++;
+
+    if((fd = open(args[index], O_RDONLY)) == -1){
+        printMessage(fileError);
+        return -1;
+    }
+
+    fstat(fd, &st);
+    size = st.st_size;
+    close(fd);
+
+    return size;
+}
+
 // Função para tratar uma tarefa já executada
 void cleanFinishedTasks(pid_t pid_ex, int status){
     int num_transformations;
+    off_t size_input = 0, size_ouput = 0;
     char * transformationsList[SMALL_BUFF_SIZE];
+    char concludedMessage[MID_BUFF_SIZE];
     Task * tmp = &executing_tasks;
     if(WIFEXITED(status)){
         while(* tmp && ((*tmp)->pid_executing != pid_ex))
@@ -466,7 +509,10 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
         if(* tmp){
             num_transformations = lineSplitter((*tmp)->command, transformationsList);
             freeResources(&sc, transformationsList, num_transformations);
-            write((*tmp)->fd_writter, concludedStatus, strlen(concludedStatus));
+            size_input = calculateSize(transformationsList + 1, 0);
+            size_ouput = calculateSize(transformationsList + 1, 1);
+            sprintf(concludedMessage, "concluded (bytes-input: %lld, bytes-output: %lld)\n", size_input, size_ouput);
+            write((*tmp)->fd_writter, concludedMessage, strlen(concludedMessage));
             close((*tmp)->fd_writter);
             deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);        
         }
@@ -556,7 +602,7 @@ int main(int argc, char *argv[]){
                     updateStatusTaskByRequestPID(&pending_tasks, pid, "pending");
                 }
                 else{
-                    write(fifo_writer, executingStatus, strlen(executingStatus));
+                    write(fifo_writer, processingStatus, strlen(processingStatus));
                     occupyResources(&sc, transformationsList, num_transformations);
                     tmp_t = createTask(tmp, pid, fifo_writer);
                     executing_tasks = taskJoiner(executing_tasks, tmp_t);
