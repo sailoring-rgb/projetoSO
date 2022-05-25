@@ -187,7 +187,7 @@ void updateStatusTaskByExecPID(Task * ptr, pid_t pid_exec, char status[]){
 }
 
 // Function to create pipes
-void makePipes(int file_des[][2], int nrPipes){
+void createPipes(int file_des[][2], int nrPipes){
     int i;
     for(i = 0; i < nrPipes; i++)
         pipe(file_des[i]);
@@ -305,17 +305,67 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
     return space_available;
 }
 
-// ***** FOR TESTING
-int dummyExecute(){
+// Function to get a transformation
+Trans getTrans(Trans transf, char name[]){
+    while(transf && strcmp(transf->operation_name, name) != 0)
+        transf = transf->next;
+    return transf;
+}
+
+// Function to execute a task
+int executeTask(char * args[], int size){
+    int index, nr_transformations, start_index;
     pid_t pid;
+
+    printMessage("\n");
+    printMessage(args[0]);
+    printMessage("\n");
+    
+    if(strcmp(args[0], "0") == 0 || strcmp(args[0], "1") == 0 || 
+        strcmp(args[0], "2") == 0 || strcmp(args[0], "3") == 0 || 
+        strcmp(args[0], "4") == 0 || strcmp(args[0], "5") == 0)
+        index = 1;
+    else
+        index = 0;
+    
+    nr_transformations = size - 2 - index;
+    start_index = 2 + index; 
+    
+    int input = open(args[index],O_RDONLY, 0666);
+    int output = open(args[index+1], O_CREAT| O_APPEND | O_WRONLY ,0666);
+
+    int file_des[nr_transformations][2];
+    char full_path[MAX_BUFF_SIZE];
+    
     switch (pid = fork()){
         case -1:
             printMessage(forkError);
         case 0:
-            printMessage("A EXECUTAR\n");
-            sleep(7);
+            if(nr_transformations == 1){
+                strcpy(full_path, transformations_path);
+                strcat(full_path, args[start_index]);
+                dup2(input, 0);
+                dup2(output, 1);
+                execl(full_path ,args[start_index], NULL);
+            }
+            else{
+                // STILL WORKING ON THIS
+                // createPipes(file_des, nr_transformations);
+                // strcpy(full_path, transformations_path);
+                // for(int i = start_index; i < nr_transformations; i++){
+                //     if(i == nr_transformations - 1){
+                //         strcat(full_path, args[i]);
+                //         dup2(input, 0);
+                //         dup2(file_des[i-3][1], 1);
+                //         closePipes(file_des, nr_transformations);
+                //         execl(full_path, args[i], NULL);
+                //     }
+                // }
+            }
             _exit(pid);
         default:
+            close(input);
+            close(output);
             break;
     }
     return pid;
@@ -334,7 +384,7 @@ void checkPendingTasks(){
         if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
             write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
             occupyResources(&sc,transformationsList, num_transformations);
-            executing_pid = dummyExecute();
+            executing_pid = executeTask(transformationsList + 1, num_transformations - 1);
             tmp_t = createTask((*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
             executing_tasks = taskJoiner(executing_tasks, tmp_t);
             deleteTask_byRequestPID(&pending_tasks, tmp_t->pid_request);
@@ -440,7 +490,7 @@ int main(int argc, char *argv[]){
             strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
             if(validateInput(&sc, transformationsList, num_transformations)){
-                if(!evaluateResourcesOcupation(&sc,transformationsList,num_transformations)){
+                if(!evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
                     write(fifo_writer, pendingStatus, strlen(pendingStatus));
                     tmp_t = createTask(tmp, pid, fifo_writer);
                     pending_tasks = taskJoiner(pending_tasks, tmp_t);
@@ -453,7 +503,7 @@ int main(int argc, char *argv[]){
                     executing_tasks = taskJoiner(executing_tasks, tmp_t);
                         // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
                         //     write(fifo_writer, fileError, strlen(fileError));
-                    executing_pid = dummyExecute();
+                    executing_pid = executeTask(transformationsList + 1, num_transformations - 1);
                     updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
                     updateExecPID(&executing_tasks, pid, executing_pid);
                 }
