@@ -316,10 +316,6 @@ Trans getTrans(Trans transf, char name[]){
 int executeTask(char * args[], int size){
     int index, nr_transformations, start_index;
     pid_t pid;
-
-    printMessage("\n");
-    printMessage(args[0]);
-    printMessage("\n");
     
     if(strcmp(args[0], "0") == 0 || strcmp(args[0], "1") == 0 || 
         strcmp(args[0], "2") == 0 || strcmp(args[0], "3") == 0 || 
@@ -344,23 +340,45 @@ int executeTask(char * args[], int size){
             if(nr_transformations == 1){
                 strcpy(full_path, transformations_path);
                 strcat(full_path, args[start_index]);
-                dup2(input, 0);
-                dup2(output, 1);
+                dup2(input, STDIN_FILENO); 
+                dup2(output, STDOUT_FILENO);
                 execl(full_path ,args[start_index], NULL);
             }
             else{
-                // STILL WORKING ON THIS
-                // createPipes(file_des, nr_transformations);
-                // strcpy(full_path, transformations_path);
-                // for(int i = start_index; i < nr_transformations; i++){
-                //     if(i == nr_transformations - 1){
-                //         strcat(full_path, args[i]);
-                //         dup2(input, 0);
-                //         dup2(file_des[i-3][1], 1);
-                //         closePipes(file_des, nr_transformations);
-                //         execl(full_path, args[i], NULL);
-                //     }
-                // }
+                createPipes(file_des, nr_transformations);
+                strcpy(full_path, transformations_path);
+                for(int i = start_index; i < nr_transformations; i++){
+                    strcat(full_path, args[i]);
+                    switch (fork()){
+                        case -1:
+                            printMessage(forkError);
+                        case 0:
+                            if(i == nr_transformations - 1){
+                                dup2(input, STDIN_FILENO);
+                                dup2(file_des[i-3][1], STDOUT_FILENO);
+                                closePipes(file_des, nr_transformations);
+                                execl(full_path, args[i], NULL);
+                            }
+                            else{
+                                if(i == 2){
+                                    dup2(output, STDOUT_FILENO);
+                                    dup2(file_des[i-2][0], STDIN_FILENO);
+                                    closePipes(file_des, nr_transformations);
+                                    execl(full_path, args[i], NULL);
+                                }
+                                else if(i != nr_transformations){
+                                    dup2(file_des[i-2][0], STDIN_FILENO);
+                                    dup2(file_des[i-3][1], STDOUT_FILENO);
+                                    closePipes(file_des, nr_transformations);
+                                    execl(full_path, args[i], NULL);
+                                }
+                                else{
+                                    closePipes(file_des, nr_transformations);
+                                    _exit(0);
+                                }
+                            }
+                    }
+                }
             }
             _exit(pid);
         default:
@@ -501,8 +519,6 @@ int main(int argc, char *argv[]){
                     occupyResources(&sc, transformationsList, num_transformations);
                     tmp_t = createTask(tmp, pid, fifo_writer);
                     executing_tasks = taskJoiner(executing_tasks, tmp_t);
-                        // if (executeTaks(&sc,transformationsList,num_transformations) == 0)
-                        //     write(fifo_writer, fileError, strlen(fileError));
                     executing_pid = executeTask(transformationsList + 1, num_transformations - 1);
                     updateStatusTaskByRequestPID(&executing_tasks, pid, "executing");
                     updateExecPID(&executing_tasks, pid, executing_pid);
@@ -535,86 +551,3 @@ int main(int argc, char *argv[]){
     unlink(fifo);
     return 0;
 }
-
-
-//   /*
-//     // **** FOR TESTING ****
-//     Trans * tr = &sc;
-
-//     while(* tr && (strcmp((*tr)->operation_name, "bcompress") != 0))
-//         tr = & ((*tr)->next);
-//     if(* tr){
-//         // WRITE SMTHING HERE
-//     }
-//     */
-
-
-// ********************* PAULA ******************
-
-// // Function to get a transformation
-// Trans getTrans(Trans transf, char name[]){
-//     while(transf && strcmp(transf->operation_name, name)!=0)
-//         transf = transf->next;
-//     return transf;
-// }
-
-// // Function to execute a set of transformations
-// int executeTaks(Trans *transf, char *transformationsList[], int num_transformations){
-//     pid_t pid;
-//     int input = open(transformationsList[2],O_RDONLY, 0777);
-//     int output = open(transformationsList[3], O_RDWR | O_CREAT ,0777);
-
-//     if(input  < 0 || output < 0)
-//         return 0;
-    
-//     int fildes[num_transformations-4][2];
-
-//     switch(pid = fork()){
-//         case -1:
-//             wait(NULL);
-//             printMessage(forkError);
-//             close(input);
-//             close(output);
-//         case 0:
-//             if(num_transformations == 5){
-//                 Trans *t = getTrans(&transf,transformationsList[4]);
-//                 dup2(input,0);
-//                 dup2(output,1);
-//                 execl((*t)->operation_name,(*t)->operation_name,NULL);
-//             } else {
-//                 makePipes(fildes,num_transformations-4);
-
-//                 for(int i = 4; i < num_transformations; i++){
-//                     Trans *t = getTrans(&transf,transformationsList[i]);
-//                     if((pid = fork()) == 0){
-
-//                         if(i == num_transformations-1){
-//                             dup2(input,0);
-//                             dup2(fildes[i-5][1],1);
-//                             closePipes(fildes, num_transformations-4);
-//                             execl((*t)->operation_name, (*t)->operation_name, NULL);
-//                         }
-//                     }
-//                     else
-//                         if(i == 4) {
-//                             dup2(output,1);
-//                             dup2(fildes[i-4][0],0);
-//                             closePipes(fildes,num_transformations-4);
-//                             execl((*t)->operation_name, (*t)->operation_name, NULL);
-//                         }
-//                         else
-//                             if(i != num_transformations-1){
-//                                 dup2(fildes[i-4][0],0);
-//                                 dup2(fildes[i-5][1],1);
-//                                 closePipes(fildes,num_transformations-4);
-//                                 execl((*t)->operation_name, (*t)->operation_name, NULL);
-//                             }
-//                         else{
-//                             closePipes(fildes, num_transformations-1);
-//                             _exit(0);
-//                         }
-//                 }
-//             }
-//         }
-//     return 1;
-// }
