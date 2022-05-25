@@ -125,7 +125,7 @@ Task addTask(Task t, char s[], pid_t pid_r, int fd_wr){
 // Function to load tasks
 int loadTasks(Task * tr , char command[], pid_t pid_r, int fd_wr){
     Task tmp_tr = NULL;
-    tmp_tr = addTask(tmp_tr, command, pid_r, fd_wr);
+    tmp_tr = addTask(tr, command, pid_r, fd_wr);
     * tr = tmp_tr;
     return 1;
 }
@@ -328,7 +328,9 @@ int dummyExecute(){
     return pid;
 }
 
-// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!! *********************** 
+// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!! 
+// *********************** REVER FUNÇÃO DE INSERÇÃO DAS TAREFAS
+// *********************** REVER FUNÇÃO DE REMOÇÃO DAS TAREFAS
 // Função para atualizar a lista de tarefas pendentes
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
