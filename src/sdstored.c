@@ -36,7 +36,7 @@ typedef struct Task{
     pid_t pid_executing;
     int fd_writter;
     int priority;
-    char command[MED_BUFF_SIZE];
+    char command[MID_BUFF_SIZE];
     char status[SMALL_BUFF_SIZE];
     struct Task * next;
 } * Task;
@@ -321,25 +321,25 @@ int dummyExecute(){
     return pid;
 }
 
-// *********************** VER ESTA FUNÇÃO PORQUE ESTÁ A DAR ERROS!!!
-// *********************** REVER FUNÇÃO DE REMOÇÃO DAS TAREFAS
 // Função para atualizar a lista de tarefas pendentes
 void checkPendingTasks(){
     Task * tr = &pending_tasks;
     Task tmp_t = NULL;
+    char tmp[MID_BUFF_SIZE];
     int num_transformations, executing_pid;
     char * transformationsList[SMALL_BUFF_SIZE];
-    while(*tr){
-        num_transformations = lineSplitter((*tr)->command, transformationsList);
+    while(* tr){
+        strcpy(tmp, (*tr)->command);
+        num_transformations = lineSplitter(tmp, transformationsList);
         if(evaluateResourcesOcupation(&sc, transformationsList, num_transformations)){
             write((*tr)->fd_writter, executingStatus, strlen(executingStatus));
             occupyResources(&sc,transformationsList, num_transformations);
             executing_pid = dummyExecute();
             tmp_t = createTask((*tr)->command, (*tr)->pid_request, (*tr)->fd_writter);
             executing_tasks = taskJoiner(executing_tasks, tmp_t);
-            updateStatusTaskByRequestPID(&executing_tasks, (*tr)->pid_request, "executing");
-            updateExecPID(&executing_tasks, (*tr)->pid_request, executing_pid);
-            deleteTask_byRequestPID(&pending_tasks, (*tr)->pid_request);
+            deleteTask_byRequestPID(&pending_tasks, tmp_t->pid_request);
+            updateStatusTaskByRequestPID(&executing_tasks, tmp_t->pid_request, "executing");
+            updateExecPID(&executing_tasks, tmp_t->pid_request, executing_pid);
             return;
         }
         tr = & ((*tr)->next);
@@ -376,7 +376,7 @@ void sigchild_handler(int signum){
 
 // Handler para sinal SIGALARM
 void sigalarm_handler(int signum){
-    //checkPendingTasks();
+    checkPendingTasks();
     alarm(1);
 }
 
