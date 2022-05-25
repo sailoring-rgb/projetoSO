@@ -17,9 +17,30 @@ ARGUMENTS:
 */
 
 // ******************************** INCLUDES ********************************
-#include "helper.h"
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdbool.h>
+#include <sys/stat.h>
+
+// ******************************** DEFINES ********************************
+#define argCountError "[ERROR] Insufficient number of arguments.\n"
+#define argError "[ERROR] Invalid arguments.\n"
+#define serverError "[ERROR] Server not running.\n"
+#define fifoError "[ERROR] Can't create fifo.\n"
+#define requestError "[ERROR] Invalid request.\n"
+#define MAX_BUFF_SIZE 1024
+
+// ******************************** GLOBAL VARIABLES ********************************
+char fifo[] = "../tmp/fifo";
 
 // ******************************** FUNCTIONS ********************************
+// Function for printing messsages
+void printMessage(char msg[]){
+    write(STDOUT_FILENO, msg, strlen(msg));
+}
+
 // Function to check if the desired transformations are valid
 bool validateRequest(int argc, char *argv[]){
     bool res = true;

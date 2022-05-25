@@ -10,7 +10,16 @@ ARGUMENTS:
 */
 
 // ******************************** INCLUDES ********************************
-#include "helper.h"
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 
 // ******************************** DEFINES ********************************
 #define forkError "[ERROR] Fork unsuccessful.\n"
@@ -20,6 +29,12 @@ ARGUMENTS:
 #define pendingStatus "Pending.\n"
 #define concludedStatus "Concluded.\n"
 #define executingStatus "Executing.\n"
+#define argCountError "[ERROR] Insufficient number of arguments.\n"
+#define serverError "[ERROR] Server not running.\n"
+#define fifoError "[ERROR] Can't create fifo.\n"
+#define MAX_BUFF_SIZE 1024
+#define MID_BUFF_SIZE 512
+#define SMALL_BUFF_SIZE 32
 
 // ******************************** STRUCTS ********************************
 // Transformation information
@@ -44,10 +59,40 @@ typedef struct Task{
 // ******************************** GLOBAL VARIABLES ********************************
 int channel;
 char transformations_path[MAX_BUFF_SIZE];
+char fifo[] = "../tmp/fifo";
 Trans sc;
 Task executing_tasks, pending_tasks;
 
+
 // ******************************** FUNCTIONS ********************************
+// Function for printing messsages
+void printMessage(char msg[]){
+    write(STDOUT_FILENO, msg, strlen(msg));
+}
+
+// Function for splitting lines into tokens
+int lineSplitter(char src[], char *dest[]){
+    char * token;
+    int size_dest = 0;
+    token = strtok(src, " ");
+    while(token){
+        dest[size_dest] = token;
+        token = strtok(NULL, " ");
+        size_dest++;
+    }
+    return size_dest;
+}
+
+// Function for reading lines in files
+int readLine(int src, char *dest){
+    int read_bytes = 0;
+    char tmp[1] = "";
+    while(read(src, tmp, 1) > 0 && tmp[0] != '\n')
+        dest[read_bytes++] = tmp[0];
+    dest[read_bytes] = '\0';
+    return read_bytes;
+}
+
 // Function to create a transformation
 Trans makeTrans(char s[]){
     Trans t = malloc(sizeof(struct Transformation));
@@ -202,7 +247,6 @@ void closePipes(int file_des[][2], int nrPipes){
     }
 }
 
-
 // Function to show server status
 void sendStatus(Trans * tr, Task * executing, Task * pending, int writer){
     char buff[MAX_BUFF_SIZE] = "";
@@ -267,7 +311,6 @@ void freeResources(Trans * tr, char * transformations[], int nrTrans){
         tr = & ((*tr)->next);
     }
 }
-
 
 // Function for validating requet
 bool validateInput(Trans * tr, char * transformations[], int nrTrans){
@@ -353,29 +396,27 @@ int executeTask(char * args[], int size){
                         case -1:
                             printMessage(forkError);
                         case 0:
-                            if(i == nr_transformations - 1){
+                            if(i == start_index){
+                                dup2(output, STDOUT_FILENO);
+                                dup2(file_des[i-2][0], STDIN_FILENO);
+                                closePipes(file_des, nr_transformations);
+                                execl(full_path, args[i], NULL);
+                            }
+                            else if(i != nr_transformations){
+                                dup2(file_des[i-2][0], STDIN_FILENO);
+                                dup2(file_des[i-3][1], STDOUT_FILENO);
+                                closePipes(file_des, nr_transformations);
+                                execl(full_path, args[i], NULL);
+                            }                            
+                            else if(i == nr_transformations - 1){
                                 dup2(input, STDIN_FILENO);
                                 dup2(file_des[i-3][1], STDOUT_FILENO);
                                 closePipes(file_des, nr_transformations);
                                 execl(full_path, args[i], NULL);
                             }
                             else{
-                                if(i == 2){
-                                    dup2(output, STDOUT_FILENO);
-                                    dup2(file_des[i-2][0], STDIN_FILENO);
-                                    closePipes(file_des, nr_transformations);
-                                    execl(full_path, args[i], NULL);
-                                }
-                                else if(i != nr_transformations){
-                                    dup2(file_des[i-2][0], STDIN_FILENO);
-                                    dup2(file_des[i-3][1], STDOUT_FILENO);
-                                    closePipes(file_des, nr_transformations);
-                                    execl(full_path, args[i], NULL);
-                                }
-                                else{
-                                    closePipes(file_des, nr_transformations);
-                                    _exit(0);
-                                }
+                                closePipes(file_des, nr_transformations);
+                                _exit(0);
                             }
                     }
                 }
