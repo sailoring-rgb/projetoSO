@@ -440,10 +440,10 @@ int executeTask(char * args[], int size){
         case 0:
             if(nr_transformations == 1){
                 strcpy(full_path, transformations_path);
-                strcat(full_path, transf[start_index]);
+                strcat(full_path, transf[0]);
                 dup2(input, STDIN_FILENO); 
                 dup2(output, STDOUT_FILENO);
-                execl(full_path ,transf[start_index], NULL);
+                execl(full_path ,transf[0], NULL);
             }
             else{
                 createPipes(file_des, nr_transformations);
@@ -483,6 +483,7 @@ int executeTask(char * args[], int size){
             }
             _exit(pid);
     }
+
     close(input);
     close(output);
 
