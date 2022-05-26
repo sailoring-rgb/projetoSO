@@ -375,7 +375,7 @@ int executeTask(char * args[], int size){
         return -1;
     }
     
-    if((output = open(args[index+1], O_CREAT| O_APPEND | O_WRONLY ,0666)) == -1){
+    if((output = open(args[index+1], O_CREAT| O_TRUNC | O_WRONLY ,0666)) == -1){
         printMessage(fileError);
         return -1;
     }

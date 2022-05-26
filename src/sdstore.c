@@ -11,9 +11,9 @@ ARGUMENTS:
 
 /* ******************************** COMMANDS ********************************
     ./sdstore status
-    ./sdstore proc-file 0 ../docs/enunciado.pdf ../docs/teste/ nop    <---- COM PRIORIDADE
-    ./sdstore proc-file 2 ../docs/enunciado.pdf ../docs/teste/ nop    <---- COM PRIORIDADE
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste/ nop
+    ./sdstore proc-file 0 ../docs/enunciado.pdf ../docs/teste nop    <---- COM PRIORIDADE
+    ./sdstore proc-file 2 ../docs/enunciado.pdf ../docs/teste nop    <---- COM PRIORIDADE
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste nop
 */
 
 // ******************************** INCLUDES ********************************
