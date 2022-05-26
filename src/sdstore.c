@@ -11,9 +11,8 @@ ARGUMENTS:
 
 /* ******************************** COMMANDS ********************************
     ./sdstore status
-    ./sdstore proc-file 0 ../docs/enunciado.pdf ../docs/teste nop    <---- COM PRIORIDADE
-    ./sdstore proc-file 2 ../docs/enunciado.pdf ../docs/teste nop    <---- COM PRIORIDADE
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste nop
+    ./sdstore proc-file -p 2 ../docs/enunciado.pdf ../docs/teste.pdf nop    <---- COM PRIORIDADE
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste.pdf nop
 */
 
 // ******************************** INCLUDES ********************************
@@ -23,6 +22,7 @@ ARGUMENTS:
 #include <string.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 // ******************************** DEFINES ********************************
 #define argCountError "[ERROR] Insufficient number of arguments.\n"
@@ -41,22 +41,34 @@ void printMessage(char msg[]){
     write(STDOUT_FILENO, msg, strlen(msg));
 }
 
+// Function to check if command has priority
+int priorityCheck(char *argv[]){
+    int priority = -1;
+    if (strcmp(argv[2], "-p") == 0)
+            priority = atoi(argv[3]);
+    return priority;
+}
+
 // Function to check if the desired transformations are valid
 bool validateRequest(int argc, char *argv[]){
-    bool res = true;
+    int priority;
     int index = 0;
-    if (strcmp(argv[2], "0") == 0 || strcmp(argv[2], "1") == 0 || strcmp(argv[2], "2") == 0 ||
-            strcmp(argv[2], "3") == 0 || strcmp(argv[2], "4") == 0 || strcmp(argv[2], "5") == 0)
-            index = 5;
+
+    if ((priority = priorityCheck(argv)) != -1){
+        if(priority > 5 || priority < 0)
+            return false;
+        index = 6;
+    }
     else
         index = 4;
-    for(int i = index ; i < argc && res; i++)
+
+    for(int i = index ; i < argc ; i++)
         if(strcmp(argv[i], "bcompress")!= 0 && strcmp(argv[i], "bdecompress")!= 0 
             && strcmp(argv[i], "decrypt")!= 0 && strcmp(argv[i], "encrypt")!= 0 
             && strcmp(argv[i], "gcompress")!= 0 && strcmp(argv[i], "gdecompress")!= 0
             && strcmp(argv[i], "nop")!= 0)
-            res = false;
-    return res;
+            return false;
+    return true;
 }
 
 // Function for viewing status information
@@ -117,7 +129,7 @@ int main(int argc, char *argv[]){
 
     if(argc < 5 || strcmp(argv[1], "proc-file") != 0 || !validateRequest(argc, argv)){
         if (argc < 5)
-            printMessage(argError);
+            printMessage(argCountError);
         else
             printMessage(requestError);
         close(fifo_reader);

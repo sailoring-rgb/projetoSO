@@ -69,6 +69,14 @@ void printMessage(char msg[]){
     write(STDOUT_FILENO, msg, strlen(msg));
 }
 
+// Function to check if command has priority
+int priorityCheck(char *argv[]){
+    int priority = -1;
+    if (strcmp(argv[0], "-p") == 0)
+            priority = atoi(argv[1]);
+    return priority;
+}
+
 // Function for splitting lines into tokens
 int lineSplitter(char src[], char *dest[]){
     char * token;
@@ -120,15 +128,11 @@ Trans addTransformation(Trans t, char s[]){
 int loadServer(char * path[], Trans * tr){
     char buffer[MAX_BUFF_SIZE];
     Trans tmp_tr = NULL;
-
     int config_fd = open(path[1], O_RDONLY);
-
     if(config_fd < 0)
         return 0;
-    
     while(readLine(config_fd, buffer))
         tmp_tr = addTransformation(tmp_tr,buffer);
-    
     close(config_fd);
     * tr = tmp_tr;
     return 1;
@@ -141,10 +145,10 @@ Task createTask(char s[], pid_t pid_r, int fd_wr){
     strcpy(t->command, s);
     token = strtok(s, " ");
     token = strtok(NULL, " ");
-    if(strcmp(token, "0") == 0 || strcmp(token, "1") == 0 || 
-        strcmp(token, "2") == 0 || strcmp(token, "3") == 0 || 
-        strcmp(token, "4") == 0 || strcmp(token, "5") == 0)
+    if(strcmp(token, "-p") == 0){
+        token = strtok(NULL, " ");
         t->priority = atoi(token);
+    }
     else
         t->priority = 0;
     strcpy(t->status, "pending");
@@ -250,7 +254,6 @@ void closePipes(int file_des[][2], int nrPipes){
 void sendStatus(Trans * tr, Task * executing, Task * pending, int writer){
     char buff[MAX_BUFF_SIZE] = "";
     int counter = 1, total_bytes = 0;
-
     while(* tr){
         total_bytes = sprintf(
             buff, "[Transformation] %s: %d/%d running/max\n",
@@ -338,7 +341,6 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
             if(strcmp((*tr)->operation_name, transformations[i]) == 0)
                 resources_needed++;
         }
-        
         if((*tr)->max_operation_allowed < ((*tr)->currently_running + resources_needed))
             return false;
             
@@ -356,33 +358,26 @@ Trans getTrans(Trans transf, char name[]){
 
 // Function to execute a task
 int executeTask(char * args[], int size){
-    int index, nr_transformations, start_index;
+    int index, nr_transformations, start_index, priority;
     pid_t pid;
-    
-    if(strcmp(args[0], "0") == 0 || strcmp(args[0], "1") == 0 || 
-        strcmp(args[0], "2") == 0 || strcmp(args[0], "3") == 0 || 
-        strcmp(args[0], "4") == 0 || strcmp(args[0], "5") == 0)
-        index = 1;
+    if ((priority = priorityCheck(args)) != -1)
+        index = 2;
     else
         index = 0;
-    
     nr_transformations = size - 2 - index;
     start_index = 2 + index; 
-    
     int input, output;
+
     if((input = open(args[index],O_RDONLY, 0666)) == -1){
         printMessage(fileError);
         return -1;
     }
-    
     if((output = open(args[index+1], O_CREAT| O_TRUNC | O_WRONLY ,0666)) == -1){
         printMessage(fileError);
         return -1;
     }
-
     int file_des[nr_transformations][2];
     char full_path[MAX_BUFF_SIZE];
-    
     switch(pid = fork()){
         case -1:
             printMessage(forkError);
@@ -421,23 +416,15 @@ int executeTask(char * args[], int size){
                                 closePipes(file_des, nr_transformations);
                                 execl(full_path, args[i], NULL);
                             }                            
-
                             else{
                                 closePipes(file_des, nr_transformations);
                                 _exit(0);
                             }
-                        default:
-                            close(input);
-                            close(output);
                     }
                 }
             }
             _exit(pid);
-        default:
-            close(input);
-            close(output);
     }
-
     close(input);
     close(output);
     return pid;
@@ -468,32 +455,24 @@ void checkPendingTasks(){
     }
 }
 
-
-// ************** STILL NEEDS TO BE REVIEWED *************/
 // Function to determine file size
 off_t calculateSize(char * args[], int offset){
-    int index, fd;
+    int index, fd, priority;
     off_t size = 0;
     struct stat st;
-
-    if(strcmp(args[0], "0") == 0 || strcmp(args[0], "1") == 0 || 
-        strcmp(args[0], "2") == 0 || strcmp(args[0], "3") == 0 || 
-        strcmp(args[0], "4") == 0 || strcmp(args[0], "5") == 0)
-        index = 1;
+    if ((priority = priorityCheck(args)) != -1)
+        index = 2;
     else
         index = 0;
     if(offset == 1)
         index++;
-
     if((fd = open(args[index], O_RDONLY)) == -1){
         printMessage(fileError);
         return -1;
     }
-
     fstat(fd, &st);
     size = st.st_size;
     close(fd);
-
     return size;
 }
 
@@ -548,50 +527,39 @@ int main(int argc, char *argv[]){
         printMessage(argCountError);
         return 0;
     }
-
     sc = NULL;
     executing_tasks = NULL;
     pending_tasks = NULL;
     Task tmp_t = NULL;
-
     // Loading server configuration
     if(!loadServer(argv, &sc)){
         printMessage(serverError);
         return 0;
     }
-
     // Setting up signal handlers
     if (signal(SIGINT, sigterm_handler) == SIG_ERR || signal(SIGCHLD, sigchild_handler) == SIG_ERR
             || signal(SIGALRM, sigalarm_handler) == SIG_ERR)
         printMessage(signalError);
-
     // Creating communication channel
     if(mkfifo(fifo, 0666) == -1){
         printMessage(fifoError);
         return 0;
     }
-
     strcpy(transformations_path, argv[2]);
-
     pid_t pid, executing_pid;
     int fifo_reader, fifo_writer, num_transformations;
     int read_bytes = 0;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
     char * transformationsList[SMALL_BUFF_SIZE];
-    
     channel = open(fifo, O_RDWR);
-
     alarm(1);
-    
     while(read(channel, &pid, sizeof(pid)) > 0){
         sprintf(pid_writing, "../tmp/%d_writer", pid);
         sprintf(pid_reading, "../tmp/%d_reader", pid);
-
         fifo_reader = open(pid_writing, O_RDONLY);
         fifo_writer = open(pid_reading, O_WRONLY);
         read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
         buffer[read_bytes] = '\0';
-        
         if(strcmp(buffer, "status")!= 0){
             strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
