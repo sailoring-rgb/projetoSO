@@ -403,17 +403,16 @@ Trans getTrans(Trans transf, char name[]){
 
 // Function to execute a task
 int executeTask(char * args[], int size){
-    int index, nr_transformations, start_index, priority;
+    int index, nr_transformations, start_index, priority, input, output;
     pid_t pid;
+
+    index = 0;
 
     if ((priority = priorityCheck(args)) != -1)
         index = 2;
-    else
-        index = 0;
 
     nr_transformations = size - 2 - index;
     start_index = 2 + index; 
-    int input, output;
 
     if((input = open(args[index],O_RDONLY, 0666)) == -1){
         printMessage(fileError);
@@ -427,6 +426,12 @@ int executeTask(char * args[], int size){
 
     int file_des[nr_transformations][2];
     char full_path[MAX_BUFF_SIZE];
+    char * transf[nr_transformations];
+
+    for(int i = 0; i < nr_transformations; i++){
+        transf[i] = malloc(sizeof(char) * MAX_BUFF_SIZE);
+        strcpy(transf[i], args[start_index + i]);
+    }
 
     switch(pid = fork()){
         case -1:
@@ -435,51 +440,54 @@ int executeTask(char * args[], int size){
         case 0:
             if(nr_transformations == 1){
                 strcpy(full_path, transformations_path);
-                strcat(full_path, args[start_index]);
+                strcat(full_path, transf[start_index]);
                 dup2(input, STDIN_FILENO); 
                 dup2(output, STDOUT_FILENO);
-                execl(full_path ,args[start_index], NULL);
+                execl(full_path ,transf[start_index], NULL);
             }
             else{
                 createPipes(file_des, nr_transformations);
-                strcpy(full_path, transformations_path);
-                for(int i = start_index; i < nr_transformations; i++){
-                    strcat(full_path, args[i]);
+                for(int i = 0; i < nr_transformations; i++){
+                    strcpy(full_path, transformations_path);
+                    strcat(full_path, transf[i]);
                     switch(fork()){
                         case -1:
                             printMessage(forkError);
                             return -2;
                         case 0:
-                            if(i == start_index){
-                                dup2(output, STDOUT_FILENO);
-                                dup2(file_des[i-2][0], STDIN_FILENO);
-                                closePipes(file_des, nr_transformations);
-                                execl(full_path, args[i], NULL);
-                            }
-                            else if(i == nr_transformations - 1){
+                            if(i == nr_transformations - 1){
+                                dup2(file_des[i-1][1], STDOUT_FILENO);
                                 dup2(input, STDIN_FILENO);
-                                dup2(file_des[i-3][1], STDOUT_FILENO);
                                 closePipes(file_des, nr_transformations);
-                                execl(full_path, args[i], NULL);
+                                execl(full_path, transf[i], NULL);
                             }
-                            else if(i != nr_transformations){
-                                dup2(file_des[i-2][0], STDIN_FILENO);
-                                dup2(file_des[i-3][1], STDOUT_FILENO);
+                            else if(i == 0){
+                                dup2(file_des[i][0], STDIN_FILENO);
+                                dup2(output, STDOUT_FILENO);
                                 closePipes(file_des, nr_transformations);
-                                execl(full_path, args[i], NULL);
+                                execl(full_path, transf[i], NULL);
+                            }
+                            else if(i != nr_transformations - 1){
+                                dup2(file_des[i][0], STDIN_FILENO);
+                                dup2(file_des[i-1][1], STDOUT_FILENO);
+                                closePipes(file_des, nr_transformations);
+                                execl(full_path, transf[i], NULL);
                             }                            
                             else{
                                 closePipes(file_des, nr_transformations);
                                 _exit(0);
                             }
                     }
+                    full_path[0] = '\0';
                 }
             }
             _exit(pid);
     }
-
     close(input);
     close(output);
+
+    for(int i = 0; i < nr_transformations; i++)
+        free(transf[i]);
 
     return pid;
 }
@@ -575,7 +583,7 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
     }
 }
 
-// **************** SIGNAL HANDLING ****************
+// ******************************** SIGNAL HANDLING ********************************
 // Handler para sinal SIGCHLD
 void sigchild_handler(int signum){
     pid_t pid;
@@ -649,7 +657,8 @@ int main(int argc, char *argv[]){
         fifo_writer = open(pid_reading, O_WRONLY);
         read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
         buffer[read_bytes] = '\0';
-        if(strcmp(buffer, "status")!= 0){
+        
+        if(strcmp(buffer, "status") != 0){
             strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
             if(validateInput(&sc, transformationsList, num_transformations)){
@@ -692,7 +701,7 @@ int main(int argc, char *argv[]){
                 close(fifo_writer);
             }
         }
-        else{
+        else if(strcmp(buffer, "status") == 0){
             switch(pid = fork()){
                 case -1:
                     printMessage(forkError);
@@ -705,7 +714,12 @@ int main(int argc, char *argv[]){
                     close(fifo_reader);
                     close(fifo_writer);
             }
-        }   
+        }
+        else{
+            buffer[0] = '\0';                
+            close(fifo_reader);
+            close(fifo_writer);            
+        } 
     }
     unlink(fifo);
     return 0;

@@ -132,7 +132,7 @@ int main(int argc, char *argv[]){
             checkStatus(fifo_reader, fifo_writer);
         else
             printMessage(argError);
-            
+        
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
