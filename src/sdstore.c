@@ -11,8 +11,20 @@ ARGUMENTS:
 
 /* ******************************** COMMANDS ********************************
     ./sdstore status
-    ./sdstore proc-file -p 2 ../docs/enunciado.pdf ../docs/teste.pdf nop    <---- COM PRIORIDADE
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste.pdf nop
+    ./sdstore proc-file -p 2 ../docs/enunciado.pdf ../docs/teste.pdf nop 
+    ./sdstore proc-file -p 3 ../docs/enunciado.pdf ../docs/teste1 nop bcompress bdecompress encrypt decrypt
+    ./sdstore proc-file -p 0 ../docs/enunciado.pdf ../docs/teste2 encrypt bcompress
+    ./sdstore proc-file ../docs/teste2 ../docs/teste3.pdf nop bdecompress decrypt
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste4 gcompress nop bcompress
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste5 nop bdecompress gdecompress
+
+    ---- COMANDOS COM ERROS ---- 
+    ./sdstore proc-file ../docs/enunciado ../docs/teste6.pdf nop <---- FICHEIRO NÃO EXISTE
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste7.pdf nada <---- TRANSFORMAÇÃO INVÁLIDA
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste8.pdf nop nop nop nop nop <---- EXCEDE CONFIGURAÇÕES
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste9.pdf <---- NÚMERO DE ARGUMENTOS INVÁLIDOS
+    ./sdstore proc ../docs/enunciado.pdf ../docs/teste10.pdf <---- ARGUMENTOS INVÁLIDOS
+    ./sdstore sta <---- ARGUMENTOS INVÁLIDOS
 */
 
 // ******************************** INCLUDES ********************************
@@ -86,7 +98,7 @@ void checkStatus(int reader, int writer){
 int main(int argc, char *argv[]){
     if(argc < 2){
         printMessage(argCountError);
-        return 0;
+        return -1;
     }
 
     int read_bytes, pid, fifo_writer, fifo_reader, channel;
@@ -101,12 +113,12 @@ int main(int argc, char *argv[]){
 
     if(mkfifo(pid_reader, 0666) == -1 || mkfifo(pid_writer, 0666) == -1){
         printMessage(fifoError);
-        return 0;
+        return -1;
     }
     
     if((channel = open(fifo, O_WRONLY)) < 0){
         printMessage(serverError);
-        return 0;
+        return -1;
     }
 
     write(channel, &pid, sizeof(pid));
@@ -120,11 +132,12 @@ int main(int argc, char *argv[]){
             checkStatus(fifo_reader, fifo_writer);
         else
             printMessage(argError);
+            
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        return 0;
+        return -1;
     }
 
     if(argc < 5 || strcmp(argv[1], "proc-file") != 0 || !validateRequest(argc, argv)){
@@ -132,11 +145,12 @@ int main(int argc, char *argv[]){
             printMessage(argCountError);
         else
             printMessage(requestError);
+
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        return 0;
+        return -1;
     }
 
     // Passing information into buffer
