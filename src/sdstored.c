@@ -412,7 +412,7 @@ int executeTask(char * args[], int size){
         index = 2;
 
     nr_transformations = size - 2 - index;
-    start_index = 2 + index; 
+    start_index = 2 + index;
 
     if((input = open(args[index],O_RDONLY, 0666)) == -1){
         printMessage(fileError);
@@ -424,68 +424,96 @@ int executeTask(char * args[], int size){
         return -1;
     }
 
-    int file_des[nr_transformations][2];
+    int pipes[nr_transformations][2], status[nr_transformations];
     char full_path[MAX_BUFF_SIZE];
     char * transf[nr_transformations];
-
-    for(int i = 0; i < nr_transformations; i++){
-        transf[i] = malloc(sizeof(char) * MAX_BUFF_SIZE);
-        strcpy(transf[i], args[start_index + i]);
-    }
 
     switch(pid = fork()){
         case -1:
             printMessage(forkError);
             return -2;
         case 0:
-            if(nr_transformations == 1){
+            for(int i = 0; i < nr_transformations; i++){
+                transf[i] = malloc(sizeof(char) * MAX_BUFF_SIZE);
+                strcpy(transf[i], args[start_index + i]);
                 strcpy(full_path, transformations_path);
-                strcat(full_path, transf[0]);
-                dup2(input, STDIN_FILENO); 
-                dup2(output, STDOUT_FILENO);
-                execl(full_path ,transf[0], NULL);
-            }
-            else{
-                createPipes(file_des, nr_transformations);
-                for(int i = 0; i < nr_transformations; i++){
+                strcat(full_path, transf[i]);
+
+                if(nr_transformations == 1){
                     strcpy(full_path, transformations_path);
-                    strcat(full_path, transf[i]);
-                    switch(fork()){
-                        case -1:
-                            printMessage(forkError);
-                            return -2;
-                        case 0:
-                            if(i == nr_transformations - 1){
-                                dup2(file_des[i-1][1], STDOUT_FILENO);
+                    strcat(full_path, transf[0]);
+                    dup2(input, STDIN_FILENO); 
+                    dup2(output, STDOUT_FILENO);
+                    execl(full_path ,transf[0], NULL);
+                }
+                else{
+                    if (i == 0){
+                        if (pipe(pipes[i]) != 0)
+                            return -1;
+                        switch(fork()){
+                            case -1:
+                                printMessage(forkError);
+                                return -2;
+                            case 0:
+                                close(pipes[i][0]);
                                 dup2(input, STDIN_FILENO);
-                                closePipes(file_des, nr_transformations);
+                                dup2(pipes[i][1], STDOUT_FILENO);
+                                close(pipes[i][1]);
                                 execl(full_path, transf[i], NULL);
-                            }
-                            else if(i == 0){
-                                dup2(file_des[i][0], STDIN_FILENO);
+                                _exit(0);
+                            default:
+                                close(pipes[i][1]);
+                        }
+                    }
+                    else if (i == nr_transformations -1){
+                        switch(fork()){
+                            case -1:
+                                printMessage(forkError);
+                                return -2;
+                            case 0:
+                                dup2(pipes[i-1][0], STDIN_FILENO);
                                 dup2(output, STDOUT_FILENO);
-                                closePipes(file_des, nr_transformations);
+                                close(pipes[i-1][0]);
                                 execl(full_path, transf[i], NULL);
-                            }
-                            else if(i != nr_transformations - 1){
-                                dup2(file_des[i][0], STDIN_FILENO);
-                                dup2(file_des[i-1][1], STDOUT_FILENO);
-                                closePipes(file_des, nr_transformations);
+                                _exit(0);
+                            default:
+                                close(pipes[i-1][0]);
+                        }
+                    }
+                    else{
+                        if (pipe(pipes[i]) != 0)
+                            return -1;
+                        switch(fork()){
+                            case -1:
+                                printMessage(forkError);
+                                return -2;
+                            case 0:
+                                close(pipes[i][0]);
+                                dup2(pipes[i][1], STDOUT_FILENO);
+                                close(pipes[i][1]);
+
+                                dup2(pipes[i-1][0], STDIN_FILENO);
+                                close(pipes[i-1][0]);
+
                                 execl(full_path, transf[i], NULL);
-                            }
+                                _exit(0);
+                            default:
+                                close(pipes[i][1]);
+                                close(pipes[i-1][0]);
+                        }
                     }
                     full_path[0] = '\0';
                 }
-                closePipes(file_des, nr_transformations);
             }
-            _exit(pid);
+            for(int i = 0; i < nr_transformations; i++){
+                free(transf[i]);
+                wait(&status[i]);
+            }
+            _exit(0);
+        default:
+            close(input);
+            close(output);  
     }
-
-    close(input);
-    close(output);
-
-    for(int i = 0; i < nr_transformations; i++)
-        free(transf[i]);
 
     return pid;
 }
@@ -528,10 +556,9 @@ void checkPendingTasks(){
 }
 
 // Function to determine file size
-int calculateSize(char * args[], int offset){
-    int index, fd, priority, bytes_read;
-    int total_read = 0;
-    char * buff = malloc(sizeof(char));
+off_t calculateSize(char * args[], int offset){
+    int index, fd, priority;
+    struct stat f_statistics;
 
     if ((priority = priorityCheck(args)) != -1)
         index = 2;
@@ -543,24 +570,18 @@ int calculateSize(char * args[], int offset){
 
     if((fd = open(args[index], O_RDONLY)) == -1)
         return -1;
-
-    // while((bytes_read = read(fd, buff, 1)) > 0)
-    //     total_read++;
-
-    struct stat s;
-    fstat(fd, &s);
-    total_read = (int) s.st_size;
+ 
+    fstat(fd, &f_statistics);
     
     close(fd);
-    free(buff);
 
-    return total_read;
+    return f_statistics.st_size;
 }
 
 // Função para tratar uma tarefa já executada
 void cleanFinishedTasks(pid_t pid_ex, int status){
     int num_transformations;
-    int size_input = 0, size_ouput = 0;
+    off_t size_input = 0, size_ouput = 0;
     char * transformationsList[SMALL_BUFF_SIZE];
     char concludedMessage[MID_BUFF_SIZE];
     Task * tmp = &executing_tasks;
@@ -576,7 +597,7 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
             size_ouput = calculateSize(transformationsList + 1, 1);
 
             if(size_input != -1 || size_ouput != -1)
-                sprintf(concludedMessage, "concluded (bytes-input: %d, bytes-output: %d)\n", size_input, size_ouput);
+                sprintf(concludedMessage, "concluded (bytes-input: %lld, bytes-output: %lld)\n", size_input, size_ouput);
             else
                 sprintf(concludedMessage, "concluded");
 
