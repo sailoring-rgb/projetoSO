@@ -10,21 +10,21 @@ ARGUMENTS:
 */
 
 /* ******************************** COMMANDS ********************************
+    ---- COMANDOS FUNCIONAIS ---- 
     ./sdstore status
     ./sdstore proc-file -p 2 ../docs/enunciado.pdf ../docs/teste.pdf nop 
     ./sdstore proc-file -p 3 ../docs/enunciado.pdf ../docs/teste1 nop bcompress bdecompress encrypt decrypt
     ./sdstore proc-file -p 1 ../docs/enunciado.pdf ../docs/teste2 encrypt bcompress
     ./sdstore proc-file ../docs/teste2 ../docs/teste3.pdf nop bdecompress decrypt
     ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste4 gcompress nop bcompress
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste5 nop bdecompress gdecompress
+    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste5 nop bcompress gdecompress
 
     ---- COMANDOS COM ERROS ---- 
-    ./sdstore proc-file ../docs/enunciado ../docs/teste6.pdf nop <---- FICHEIRO NÃO EXISTE
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste7.pdf nada <---- TRANSFORMAÇÃO INVÁLIDA
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste8.pdf nop nop nop nop nop <---- EXCEDE CONFIGURAÇÕES
-    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste9.pdf <---- NÚMERO DE ARGUMENTOS INVÁLIDOS
-    ./sdstore proc ../docs/enunciado.pdf ../docs/teste10.pdf <---- ARGUMENTOS INVÁLIDOS
-    ./sdstore sta <---- ARGUMENTOS INVÁLIDOS
+    FICHEIRO NÃO EXISTE            |    ./sdstore proc-file ../docs/enunciado ../docs/teste6.pdf nop
+    TRANSFORMAÇÃO INVÁLIDA         |    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste7.pdf nada 
+    EXCEDE CONFIGURAÇÕES           |    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste8.pdf nop nop nop nop nop
+    NÚMERO DE ARGUMENTOS INVÁLIDOS |    ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste9.pdf
+    ARGUMENTOS INVÁLIDOS           |    ./sdstore sta 
 */
 
 // ******************************** INCLUDES ********************************
@@ -105,11 +105,31 @@ int main(int argc, char *argv[]){
     char pid_reader[32];
     char pid_writer[32];
     char buffer[MAX_BUFF_SIZE];
+    bool status = false, proc_file = false;
 
     pid = getpid();
 
     sprintf(pid_reader, "../tmp/%d_reader", pid);
     sprintf(pid_writer, "../tmp/%d_writer", pid);
+
+    if(strcmp(argv[1], "status") != 0 && strcmp(argv[1], "proc-file") != 0){
+        status = false;
+        proc_file = false;
+    }
+    else if(strcmp(argv[1], "status") == 0)
+        status = true;
+    else if(strcmp(argv[1], "proc-file") == 0)
+        proc_file = true;
+    
+    if((!status && !proc_file) || (argc < 5 && proc_file) || (status && argc != 2)){
+        printMessage(requestError);
+        return -1;
+        }
+        
+    if(proc_file && !validateRequest(argc, argv)){
+        printMessage(requestError);
+        return -1;
+    }
 
     if(mkfifo(pid_reader, 0666) == -1 || mkfifo(pid_writer, 0666) == -1){
         printMessage(fifoError);
@@ -127,53 +147,37 @@ int main(int argc, char *argv[]){
     fifo_writer = open(pid_writer, O_WRONLY);
     fifo_reader = open(pid_reader, O_RDONLY);
 
-    if(argc == 2){
-        if(strcmp(argv[1], "status") == 0)
-            checkStatus(fifo_reader, fifo_writer);
-        else
-            printMessage(argError);
-        
+    if(status){
+        checkStatus(fifo_reader, fifo_writer);
         close(fifo_reader);
         close(fifo_writer);
         unlink(pid_reader);
         unlink(pid_writer);
-        return -1;
+        return 0;
     }
-
-    if(argc < 5 || strcmp(argv[1], "proc-file") != 0 || !validateRequest(argc, argv)){
-        if (argc < 5)
-            printMessage(argCountError);
-        else
-            printMessage(requestError);
-
-        close(fifo_reader);
-        close(fifo_writer);
-        unlink(pid_reader);
-        unlink(pid_writer);
-        return -1;
-    }
-
-    // Passing information into buffer
-    buffer[0] = '\0';
-    for(int i = 1; i < argc; i++){
-        strcat(buffer, argv[i]);
-        if(i != argc -1)
-            strcat(buffer, " ");
-    }
-
-    write(fifo_writer, buffer, strlen(buffer));
-
-    while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) > 0){
-        buffer[read_bytes] = '\0';
-        write(STDOUT_FILENO, buffer, read_bytes);
-        fflush(stdout);
+    if(proc_file){
+        // Passing information into buffer
         buffer[0] = '\0';
+        for(int i = 1; i < argc; i++){
+            strcat(buffer, argv[i]);
+            if(i != argc -1)
+                strcat(buffer, " ");
+        }
+
+        write(fifo_writer, buffer, strlen(buffer));
+
+        while((read_bytes = read(fifo_reader, buffer, MAX_BUFF_SIZE)) > 0){
+            buffer[read_bytes] = '\0';
+            write(STDOUT_FILENO, buffer, read_bytes);
+            fflush(stdout);
+            buffer[0] = '\0';
+        }
+
+        close(fifo_reader);
+        close(fifo_writer);
+        unlink(pid_reader);
+        unlink(pid_writer);
+
+        return 0;
     }
-
-    close(fifo_reader);
-    close(fifo_writer);
-    unlink(pid_reader);
-    unlink(pid_writer);
-
-    return 0;
 }
