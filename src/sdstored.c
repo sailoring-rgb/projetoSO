@@ -472,14 +472,11 @@ int executeTask(char * args[], int size){
                                 dup2(file_des[i-1][1], STDOUT_FILENO);
                                 closePipes(file_des, nr_transformations);
                                 execl(full_path, transf[i], NULL);
-                            }                            
-                            else{
-                                closePipes(file_des, nr_transformations);
-                                _exit(0);
                             }
                     }
                     full_path[0] = '\0';
                 }
+                closePipes(file_des, nr_transformations);
             }
             _exit(pid);
     }
@@ -531,7 +528,7 @@ void checkPendingTasks(){
 }
 
 // Function to determine file size
-off_t calculateSize(char * args[], int offset){
+int calculateSize(char * args[], int offset){
     int index, fd, priority, bytes_read;
     int total_read = 0;
     char * buff = malloc(sizeof(char));
@@ -559,7 +556,7 @@ off_t calculateSize(char * args[], int offset){
 // Função para tratar uma tarefa já executada
 void cleanFinishedTasks(pid_t pid_ex, int status){
     int num_transformations;
-    off_t size_input = 0, size_ouput = 0;
+    int size_input = 0, size_ouput = 0;
     char * transformationsList[SMALL_BUFF_SIZE];
     char concludedMessage[MID_BUFF_SIZE];
     Task * tmp = &executing_tasks;
@@ -575,7 +572,7 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
             size_ouput = calculateSize(transformationsList + 1, 1);
 
             if(size_input != -1 || size_ouput != -1)
-                sprintf(concludedMessage, "concluded (bytes-input: %lld, bytes-output: %lld)\n", size_input, size_ouput);
+                sprintf(concludedMessage, "concluded (bytes-input: %d, bytes-output: %d)\n", size_input, size_ouput);
             else
                 sprintf(concludedMessage, "concluded");
 

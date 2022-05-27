@@ -13,7 +13,7 @@ ARGUMENTS:
     ./sdstore status
     ./sdstore proc-file -p 2 ../docs/enunciado.pdf ../docs/teste.pdf nop 
     ./sdstore proc-file -p 3 ../docs/enunciado.pdf ../docs/teste1 nop bcompress bdecompress encrypt decrypt
-    ./sdstore proc-file -p 0 ../docs/enunciado.pdf ../docs/teste2 encrypt bcompress
+    ./sdstore proc-file -p 1 ../docs/enunciado.pdf ../docs/teste2 encrypt bcompress
     ./sdstore proc-file ../docs/teste2 ../docs/teste3.pdf nop bdecompress decrypt
     ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste4 gcompress nop bcompress
     ./sdstore proc-file ../docs/enunciado.pdf ../docs/teste5 nop bdecompress gdecompress
