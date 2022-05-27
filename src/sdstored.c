@@ -532,9 +532,9 @@ void checkPendingTasks(){
 
 // Function to determine file size
 off_t calculateSize(char * args[], int offset){
-    int index, fd, priority;
-    off_t size = 0;
-    struct stat st;
+    int index, fd, priority, bytes_read;
+    int total_read = 0;
+    char * buff = malloc(sizeof(char));
 
     if ((priority = priorityCheck(args)) != -1)
         index = 2;
@@ -547,11 +547,13 @@ off_t calculateSize(char * args[], int offset){
     if((fd = open(args[index], O_RDONLY)) == -1)
         return -1;
 
-    fstat(fd, &st);
-    size = st.st_size;
+    while((bytes_read = read(fd, buff, 1)) > 0)
+        total_read++;
+    
     close(fd);
+    free(buff);
 
-    return size;
+    return total_read;
 }
 
 // Função para tratar uma tarefa já executada
