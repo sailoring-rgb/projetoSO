@@ -264,22 +264,6 @@ void updateStatusTaskByExecPID(Task * ptr, pid_t pid_exec, char status[]){
         strcpy((*ptr)->status, status);
 }
 
-// Function to create pipes
-void createPipes(int file_des[][2], int nrPipes){
-    int i;
-    for(i = 0; i < nrPipes; i++)
-        pipe(file_des[i]);
-}
-
-// Function to close pipes
-void closePipes(int file_des[][2], int nrPipes){
-    int i;
-    for (i= 0; i < nrPipes; i++){
-        close(file_des[i][0]);
-        close(file_des[i][1]);
-    }
-}
-
 // Function to show server status
 void sendStatus(Trans * tr, Task * executing, Task * pending, int writer){
     char buff[MAX_BUFF_SIZE] = "";
