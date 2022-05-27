@@ -155,6 +155,7 @@ int main(int argc, char *argv[]){
         unlink(pid_writer);
         return 0;
     }
+    
     if(proc_file){
         // Passing information into buffer
         buffer[0] = '\0';

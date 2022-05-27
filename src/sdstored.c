@@ -650,7 +650,7 @@ int main(int argc, char *argv[]){
     int fifo_reader, fifo_writer, num_transformations;
     int read_bytes = 0;
     char pid_reading[32], pid_writing[32], buffer[MAX_BUFF_SIZE], tmp[MAX_BUFF_SIZE];
-    char * transformationsList[SMALL_BUFF_SIZE];
+    char * transformationsList[SMALL_BUFF_SIZE], * token;
 
     if((channel = open(fifo, O_RDWR)) == -1){
         printMessage(channelError);
@@ -666,8 +666,12 @@ int main(int argc, char *argv[]){
         fifo_writer = open(pid_reading, O_WRONLY);
         read_bytes = read(fifo_reader, &buffer, MAX_BUFF_SIZE);
         buffer[read_bytes] = '\0';
-        
-        if(strcmp(buffer, "status") != 0){
+
+        strcpy(tmp, buffer);
+        token = strtok(tmp, " ");
+
+        if(strcmp(token, "proc-file") == 0){
+            tmp[0] = '\0';
             strcpy(tmp, buffer);
             num_transformations = lineSplitter(buffer, transformationsList);
             if(validateInput(&sc, transformationsList, num_transformations)){
@@ -710,7 +714,7 @@ int main(int argc, char *argv[]){
                 close(fifo_writer);
             }
         }
-        else if(strcmp(buffer, "status") == 0){
+        else if(strcmp(token, "status") == 0){
             switch(pid = fork()){
                 case -1:
                     printMessage(forkError);
