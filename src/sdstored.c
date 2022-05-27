@@ -544,8 +544,12 @@ int calculateSize(char * args[], int offset){
     if((fd = open(args[index], O_RDONLY)) == -1)
         return -1;
 
-    while((bytes_read = read(fd, buff, 1)) > 0)
-        total_read++;
+    // while((bytes_read = read(fd, buff, 1)) > 0)
+    //     total_read++;
+
+    struct stat s;
+    fstat(fd, &s);
+    total_read = (int) s.st_size;
     
     close(fd);
     free(buff);
