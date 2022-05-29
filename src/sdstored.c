@@ -358,9 +358,8 @@ bool validateInput(Trans * tr, char * transformations[], int nrTrans){
 // Function for cheking if resources are free
 bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTrans){
     int resources_needed;
-    bool space_available = true;
 
-    while(* tr  && space_available){
+    while(* tr){
         resources_needed = 0;
 
         for(int i = 2; i < nrTrans; i++){
@@ -374,7 +373,7 @@ bool evaluateResourcesOcupation(Trans * tr, char * transformations[], int nrTran
         tr = & ((*tr)->next);
     }
 
-    return space_available;
+    return true;
 }
 
 // Function to get a transformation
@@ -429,6 +428,7 @@ int executeTask(char * args[], int size){
                     dup2(input, STDIN_FILENO); 
                     dup2(output, STDOUT_FILENO);
                     execl(full_path ,transf[0], NULL);
+                    _exit(0);
                 }
                 else{
                     if (i == 0){
@@ -579,12 +579,7 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
             freeResources(&sc, transformationsList, num_transformations);
             size_input = calculateSize(transformationsList + 1, 0);
             size_ouput = calculateSize(transformationsList + 1, 1);
-
-            if(size_input != -1 || size_ouput != -1)
-                sprintf(concludedMessage, "concluded (bytes-input: %lld, bytes-output: %lld)\n", size_input, size_ouput);
-            else
-                sprintf(concludedMessage, "concluded");
-
+            sprintf(concludedMessage, "concluded (bytes-input: %lld, bytes-output: %lld)\n", size_input, size_ouput);
             write((*tmp)->fd_writter, concludedMessage, strlen(concludedMessage));
             close((*tmp)->fd_writter);
             deleteTask_byRequestPID(&executing_tasks, (*tmp)->pid_request);        
