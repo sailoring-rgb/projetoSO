@@ -397,15 +397,11 @@ int executeTask(char * args[], int size){
     nr_transformations = size - 2 - index;
     start_index = 2 + index;
 
-    if((input = open(args[index],O_RDONLY, 0666)) == -1){
-        printMessage(fileError);
+    if((input = open(args[index],O_RDONLY, 0666)) == -1)
         return -1;
-    }
 
-    if((output = open(args[index+1], O_CREAT| O_TRUNC | O_WRONLY ,0666)) == -1){
-        printMessage(fileError);
+    if((output = open(args[index+1], O_CREAT| O_TRUNC | O_WRONLY ,0666)) == -1)
         return -1;
-    }
 
     int pipes[nr_transformations][2], status[nr_transformations];
     char full_path[MAX_BUFF_SIZE];
@@ -588,7 +584,7 @@ void cleanFinishedTasks(pid_t pid_ex, int status){
 }
 
 // ******************************** SIGNAL HANDLING ********************************
-// Handler para sinal SIGCHLD
+// Routine for handling SIGCHLD
 void sigchild_handler(int signum){
     pid_t pid;
     int status;
@@ -598,15 +594,18 @@ void sigchild_handler(int signum){
     }
 }
 
-// Handler para sinal SIGALARM
+// Routine for handling SIGALARM
 void sigalarm_handler(int signum){
     checkPendingTasks();
     alarm(1);
 }
 
-// Routine for handling SIGTERM
-void sigterm_handler(int sig){
+// Routine for handling SIGTERM and SIGINT
+void termiation_handler(int sig){
     close(channel);
+    unlink(fifo);
+    while(executing_tasks != NULL || pending_tasks != NULL)
+        pause();
 }
 
 // ******************************** MAIN ********************************
@@ -629,7 +628,8 @@ int main(int argc, char *argv[]){
     }
 
     // Setting up signal handlers
-    if (signal(SIGINT, sigterm_handler) == SIG_ERR || signal(SIGCHLD, sigchild_handler) == SIG_ERR || signal(SIGALRM, sigalarm_handler) == SIG_ERR){
+    if (signal(SIGTERM, termiation_handler) == SIG_ERR || signal(SIGCHLD, sigchild_handler) == SIG_ERR ||
+            signal(SIGINT, termiation_handler) == SIG_ERR || signal(SIGALRM, sigalarm_handler) == SIG_ERR){
         printMessage(signalError);
         return -1;
     }
@@ -729,6 +729,5 @@ int main(int argc, char *argv[]){
             close(fifo_writer);            
         } 
     }
-    unlink(fifo);
     return 0;
 }
