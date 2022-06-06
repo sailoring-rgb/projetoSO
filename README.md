@@ -2,7 +2,7 @@
 
 Projeto de Sistemas Operativos 21/22
 
-Classificação Final: .../20
+Classificação Final: 15.8/20
 
 # Autores
 
