@@ -1,11 +1,11 @@
 # SO
 
-Projeto de Sistemas Operativos 21/22
+Project accomplished in the scope of <b><i>Operating Systems 21/22</i></b>
 
-Classificação Final: 16/20
+Final Classification: 16/20
 
-# Autores
+# Authors
 
-- Ana Murta
-- Ana Henriques
-- Rui Coelho
+- <a href="https://github.com/AnaMurta10">Ana Murta</a>
+- <a href="https://github.com/sailoring-rgb">Ana Henriques</a>
+- <a href="https://github.com/ruipgcoelho">Rui Coelho</a>
